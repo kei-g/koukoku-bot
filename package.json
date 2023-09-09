@@ -1,0 +1,39 @@
+{
+  "author": {
+    "email": "km.8k6ce+github@gmail.com",
+    "name": "kei-g"
+  },
+  "dependencies": {
+    "@redis/client": "^1.5.9",
+    "esbuild-register": "^3.5.0"
+  },
+  "description": "Bot for telnets://koukoku.shadan.open.ad.jp",
+  "devDependencies": {
+    "@types/node": "^20.6.0",
+    "@typescript-eslint/eslint-plugin": "^6.6.0",
+    "@typescript-eslint/parser": "^6.6.0",
+    "esbuild": "^0.19.2",
+    "esbuild-register": "^3.4.2",
+    "eslint": "^8.49.0",
+    "npm-run-all": "^4.1.5",
+    "rimraf": "^5.0.1"
+  },
+  "engines": {
+    "node": "^20.5.1"
+  },
+  "license": "BSD-3-Clause",
+  "main": "dist/main.js",
+  "name": "@kei-g/koukoku-bot",
+  "private": "true",
+  "publishConfig": {
+    "access": "restricted"
+  },
+  "scripts": {
+    "build": "esbuild src/main.ts --bundle --external:@redis/client --format=cjs --minify --outfile=dist/main.js --platform=node --target=es2022",
+    "clean": "rimraf dist/",
+    "lint": "eslint src/**/*.ts",
+    "start": "node dist/main.js",
+    "test": "node --require esbuild-register src/main.ts"
+  },
+  "version": "1.0.0"
+}
