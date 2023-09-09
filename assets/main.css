@@ -1,0 +1,171 @@
+@media screen and (max-width: 480px) {
+  nav#header>ul {
+    padding: 0 1em !important;
+  }
+
+  nav#header>ul>li>h1 {
+    font-size: 1em !important;
+  }
+
+  form>button {
+    border-radius: 0.5em !important;
+  }
+
+  form>input#koukoku-shadan-open-ad-jp-message {
+    min-width: calc(100vw - 16.5em) !important;
+  }
+
+  ul#messages>li {
+    overflow-wrap: break-word !important;
+  }
+}
+
+@media screen and (max-width: 918px) {
+  nav#header>ul>li.optional {
+    display: none !important;
+  }
+}
+
+body,
+html {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+form,
+nav,
+ul {
+  box-sizing: border-box;
+  margin: 0;
+}
+
+form {
+  display: flex;
+  flex-direction: row;
+  flex-wrap: nowrap;
+  justify-content: space-between;
+  column-gap: 0.5em;
+  padding: 1em 0;
+}
+
+form>button {
+  -moz-appearance: none;
+  -webkit-appearance: none;
+  appearance: none;
+  background: #76f;
+  border-radius: 0.25em;
+  border: 0;
+  color: #eee;
+  font-size: 0.875em;
+  margin: 0;
+  max-width: 5em;
+  padding: 0.25em 1em;
+  text-wrap: nowrap;
+  width: 5em;
+}
+
+form>button:disabled {
+  background-color: #ccc;
+  color: #333;
+}
+
+form>input#token {
+  margin: 0;
+  max-width: 4em;
+}
+
+form>input#koukoku-shadan-open-ad-jp-message {
+  margin: 0;
+  min-width: calc(100vw - 15em);
+}
+
+nav {
+  background-color: rgba(29, 29, 29, .875);
+  display: block;
+  padding: 0;
+  position: sticky;
+  width: calc(100vw - var(--scrollbar));
+  z-index: 1;
+}
+
+nav#header {
+  box-shadow: 0 12px 12px 0 rgba(29, 29, 29, .75);
+  top: 0;
+}
+
+nav#footer {
+  box-shadow: 0 -8px 8px 0 rgba(29, 29, 29, .75);
+  bottom: 0;
+}
+
+nav>ul {
+  display: flex;
+  flex-direction: row;
+  list-style-type: none;
+}
+
+nav#header>ul {
+  align-items: baseline;
+  column-gap: 1em;
+  justify-content: flex-start;
+  padding: 0 2em;
+}
+
+nav#header>ul>li>h1 {
+  text-align: center;
+}
+
+nav#footer>ul {
+  justify-content: space-between;
+  padding: 0 1em;
+}
+
+nav#header>ul>li:has(>a>img) {
+  align-self: center;
+}
+
+nav>ul>li>h1 {
+  color: white;
+}
+
+ul#messages {
+  list-style-type: none;
+  padding: 0 1em;
+}
+
+ul#messages:has(>li.now-lowding) {
+  display: block;
+  min-height: 100vh;
+}
+
+ul#messages>li {
+  background-color: #eee;
+  border-color: #333;
+  border-radius: 0.5em;
+  border-style: solid;
+  border-width: 1px;
+  display: block;
+  font-family: monospace;
+  margin: 0.5ex 0;
+  padding: 1em;
+  text-wrap: wrap;
+  white-space-collapse: preserve;
+}
+
+ul#messages>li.now-loading {
+  min-height: 100vh;
+  visibility: hidden;
+}
+
+ul#messages>li:hover {
+  background-color: #acf;
+  box-shadow: 0 8px 20px -5px rgba(0, 0, 0, .15), 0 0 5px rgba(0, 0, 0, .1);
+  transform: translateX(-4px);
+}
+
+ul#messages>li:hover,
+ul#messages>li:not(:hover) {
+  transition-duration: 500ms;
+  transition-property: background-color box-shadow transform;
+}

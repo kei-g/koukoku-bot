@@ -1,0 +1,29 @@
+{
+  "compilerOptions": {
+    "alwaysStrict": true,
+    "declaration": false,
+    "downlevelIteration": true,
+    "emitBOM": false,
+    "esModuleInterop": true,
+    "experimentalDecorators": false,
+    "lib": [
+      "DOM",
+      "ES2021.String",
+    ],
+    "module": "NodeNext",
+    "moduleResolution": "NodeNext",
+    "newLine": "lf",
+    "pretty": false,
+    "removeComments": true,
+    "strict": true,
+    "strictNullChecks": false,
+    "target": "ES2022",
+    "typeRoots": [
+      "../../node_modules/@types",
+    ],
+  },
+  "exclude": [],
+  "include": [
+    ".",
+  ],
+}

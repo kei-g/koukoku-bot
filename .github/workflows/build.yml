@@ -1,0 +1,30 @@
+jobs:
+  build:
+    name: Build on Node.js ${{ matrix.node }}
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        node:
+          - 20
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 1
+      - name: Setup Node.js
+        uses: actions/setup-node@v3
+        with:
+          cache: npm
+          node-version: ${{ matrix.node }}
+      - name: Upgrade npm
+        run: npm install npm@latest -g
+      - name: Setup modules
+        run: npm ci
+      - name: Build
+        run: npm run build
+name: Build
+on:
+  push:
+    branches:
+      - main
