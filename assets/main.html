@@ -1,0 +1,70 @@
+<!DOCTYPE html>
+<html lang="ja">
+
+<head>
+  <meta charset="UTF-8" />
+  <link href="apple-touch-icon.png" rel="apple-touch-icon" />
+  <link href="favicon-16x16.png" rel="icon" sizes="16x16" type="image/png" />
+  <link href="favicon-32x32.png" rel="icon" sizes="32x32" type="image/png" />
+  <link href="favicon.ico" rel="icon" sizes="any" type="image/vnd.microsoft.icon" />
+  <link href="main.css" rel="stylesheet" type="text/css" />
+  <link href="site.webmanifest" rel="manifest" />
+  <meta content="#1d1d1d" name="theme-color" />
+  <meta content="公告Bot" property="og:site_name" />
+  <meta content="公告Bot" property="og:title" />
+  <meta content="https://${host}/" property="og:url" />
+  <meta content="initial-scale=1,width=device-width" name="viewport" />
+  <meta content="ja_JP" property="og:locale" />
+  <meta content="koukoku-ogp.png" property="og:image" />
+  <meta content="koukoku.shadan.open.ad.jpの過去ログ" name="description" />
+  <meta content="koukoku.shadan.open.ad.jpの過去ログ" property="og:description" />
+  <meta content="website" property="og:type" />
+  <script defer src="main.js" type="module"></script>
+  <title>公告Bot</title>
+</head>
+
+<body>
+  <nav id="header">
+    <ul>
+      <li>
+        <a href="/" rel="noopener">
+          <img height="40" src="/koukoku.png" width="40" />
+        </a>
+      </li>
+      <li>
+        <h1>公告過去ログ</h1>
+      </li>
+      <li class="optional">
+        <a href="/status" rel="noopener" target="_blank">
+          <img src="https://img.shields.io/badge/status-koukoku--bot-green?style=plastic" />
+        </a>
+      </li>
+      <li>
+        <a href="https://github.com/kei-g/koukoku-bot" rel="noopener noreferrer" target="_blank">
+          <img src="https://img.shields.io/badge/github-kei--g%2Fkoukoku--bot-blue?logo=github&style=plastic" />
+        </a>
+      </li>
+      <li class="optional">
+        <a href="https://gist.github.com/kei-g/42fe90810a457ca2d31012175c470a2c" rel="noopener noreferrer" target="_blank">
+          <img src="https://img.shields.io/badge/gist-%e3%82%b9%e3%83%9a%e3%83%bc%e3%82%b9%e4%bb%95%e6%a7%98-blue?logo=github&style=plastic" />
+        </a>
+      </li>
+    </ul>
+  </nav>
+  <ul id="messages">
+    <li class="now-loading"></li>
+  </ul>
+  <nav id="footer">
+    <ul>
+      <li>
+        <form action="/post" method="post" onsubmit="event.preventDefault()">
+          <input autocomplete="off" id="token" name="token" placeholder="トークン" type="password" />
+          <input autocomplete="off" id="koukoku-shadan-open-ad-jp-message" name="msg" placeholder="内容をここに入力" type="text" />
+          <button>発言</button>
+        </form>
+      </li>
+    </ul>
+  </nav>
+</body>
+
+</html>
