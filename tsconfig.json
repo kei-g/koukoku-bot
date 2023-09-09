@@ -1,0 +1,30 @@
+{
+  "compilerOptions": {
+    "alwaysStrict": true,
+    "declaration": true,
+    "declarationDir": ".",
+    "downlevelIteration": true,
+    "emitBOM": false,
+    "emitDeclarationOnly": true,
+    "emitDecoratorMetadata": false,
+    "experimentalDecorators": false,
+    "lib": [
+      "ES2021.String",
+    ],
+    "module": "CommonJS",
+    "moduleResolution": "node",
+    "newLine": "lf",
+    "pretty": false,
+    "removeComments": true,
+    "strict": true,
+    "strictNullChecks": false,
+    "target": "ES2022",
+    "typeRoots": [
+      "node_modules/@types",
+    ],
+  },
+  "exclude": [],
+  "include": [
+    "src",
+  ],
+}

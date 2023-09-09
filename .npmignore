@@ -1,0 +1,8 @@
+**/.*
+**/CODE_OF_CONDUCT.md
+**/CONTRIBUTING.md
+**/assets/
+**/images/
+**/src/
+**/tools/
+**/tsconfig.json
