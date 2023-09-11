@@ -6,7 +6,7 @@ import { RedisCommandArgument } from '@redis/client/dist/lib/commands'
 export class Bot implements AsyncDisposable, BotInterface {
   private static readonly BackLogRE = />>\s+「\s+(バック)?ログ(\s+(?<count>[1-9]\d*))?\s+」/
   private static readonly EscapesRE = /(\x07|\x1b\[\d+m|\xef\xbb\xbf)/g
-  private static readonly TranslateRE = />>\s+「\s+翻訳\s+(?<text>[^」]+)/
+  private static readonly TranslateRE = />>\s+「\s+翻訳\s+((?<lang>bg|cs|da|de|el|en|es|et|fi|fr|hu|id|it|ja|ko|lt|lv|nb|nl|pl|pt|ro|ru|sk|sl|sv|tr|uk|zh|bg|cs|da|de|el|en|es|et|fi|fr|hu|id|it|ja|ko|lt|lv|nb|nl|pl|pt|ro|ru|sk|sl|sv|tr|uk|zh)\s+)?(?<text>[^」]+)/i
 
   private static get LogKey(): string {
     return process.env.REDIS_LOG_KEY ?? 'koukoku'
@@ -15,6 +15,7 @@ export class Bot implements AsyncDisposable, BotInterface {
   private readonly _bound: (data: Buffer) => void
   private readonly client: tls.TLSSocket
   private readonly db: redis.RedisClientType
+  private readonly lang = new DeepL.LanguageMap()
   private readonly pending = new Array<Buffer>()
   private readonly recent = { list: new Array<BackLog>(), map: new Map<string, BackLog>() }
   private readonly web: Web
@@ -110,13 +111,16 @@ export class Bot implements AsyncDisposable, BotInterface {
   }
 
   private async translateAsync(match: RegExpMatchArray): Promise<void> {
-    const r = await DeepL.translateAsync(match.groups.text)
+    const { lang, text } = match.groups
+    const to = this.lang.getName(lang)?.concat('に') ?? ''
+    const r = await DeepL.translateAsync(text, lang)
     if (isDeepLError(r))
       this.send(r.message)
     else
       for (const t of r.translations) {
         const text = t.text.replaceAll('\r\n', '\n').replaceAll('\n', '').trim()
-        this.send(`[翻訳結果:${t.detected_source_language}] ${text}`)
+        const name = this.lang.getName(t.detected_source_language)
+        this.send(`[${name}から${to}翻訳] ${text}`)
       }
   }
 
