@@ -38,6 +38,7 @@ export class Web implements Disposable {
   private async handleGetRequest(request: IncomingMessage, response: ServerResponse): Promise<void> {
     const routes = {
       '': this.respondRootAsync.bind(this, request, response),
+      'health': this.respondHealthAsync.bind(this, request, response),
       'logs': this.respondLogAsync.bind(this, request, response),
       'messages': this.respondMessagesAsync.bind(this, request, response),
       'status': this.respondStatusAsync.bind(this, request, response),
@@ -123,6 +124,11 @@ export class Web implements Disposable {
     response.setHeader('Content-Length', data.byteLength)
     response.setHeader('Content-Type', types[name.split('.').at(-1)])
     response.write(data)
+  }
+
+  private respondHealthAsync(_request: IncomingMessage, response: ServerResponse): Promise<void> {
+    response.statusCode = 200
+    return Promise.resolve()
   }
 
   private async respondLogAsync(request: IncomingMessage, response: ServerResponse): Promise<void> {
