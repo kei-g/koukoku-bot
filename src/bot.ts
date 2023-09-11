@@ -1,7 +1,8 @@
 import * as redis from '@redis/client'
 import * as tls from 'tls'
-import { BackLog, BotInterface, DeepL, KoukokuServer, Web, isDeepLError } from '.'
+import { BackLog, BotInterface, DeepL, KoukokuServer, Unicode, Web, isDeepLError } from '.'
 import { RedisCommandArgument } from '@redis/client/dist/lib/commands'
+import { decode, encode } from 'iconv-lite'
 
 export class Bot implements AsyncDisposable, BotInterface {
   private static readonly BackLogRE = />>\s+「\s+(バック)?ログ(\s+(?<count>[1-9]\d*))?\s+」/
@@ -118,9 +119,11 @@ export class Bot implements AsyncDisposable, BotInterface {
       this.send(`[Bot] 翻訳エラー, ${r.message}`)
     else
       for (const t of r.translations) {
-        const text = t.text.replaceAll('\r\n', '\n').replaceAll('\n', '').trim()
         const name = this.lang.getName(t.detected_source_language)
-        this.send(`[${name}から${to}翻訳] ${text}`)
+        const text = t.text.replaceAll('\r\n', '\n').replaceAll('\n', '').trim()
+        const converted = encode(text, 'sjis')
+        const mutated = decode(converted, 'sjis')
+        this.send(`[${name}から${to}翻訳] ${text == mutated ? text : Unicode.escape(text)}`)
       }
   }
 
