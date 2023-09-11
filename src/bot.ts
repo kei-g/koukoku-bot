@@ -1,6 +1,6 @@
 import * as redis from '@redis/client'
 import * as tls from 'tls'
-import { BotInterface, DeepL, KoukokuServer, Log, Web, isDeepLError } from '.'
+import { BotInterface, DeepL, KoukokuServer, Log, Unicode, Web, isDeepLError } from '.'
 import { RedisCommandArgument } from '@redis/client/dist/lib/commands'
 
 export class Bot implements AsyncDisposable, BotInterface {
@@ -118,9 +118,9 @@ export class Bot implements AsyncDisposable, BotInterface {
       this.send(`[Bot] 翻訳エラー, ${r.message}`)
     else
       for (const t of r.translations) {
-        const text = t.text.replaceAll('\r\n', '\n').replaceAll('\n', '').trim()
         const name = this.lang.getName(t.detected_source_language)
-        this.send(`[${name}から${to}翻訳] ${text}`)
+        const escaped = Unicode.escape(t.text.replaceAll(/\r?\n/g, '').trim())
+        this.send(`[${name}から${to}翻訳] ${escaped}`)
       }
   }
 
