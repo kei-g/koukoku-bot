@@ -3,11 +3,13 @@ import * as tls from 'tls'
 import { BackLog, BotInterface, DeepL, KoukokuServer, Unicode, Web, isDeepLError } from '.'
 import { RedisCommandArgument } from '@redis/client/dist/lib/commands'
 import { decode, encode } from 'iconv-lite'
+import { promisify } from 'util'
+import { readFile } from 'fs'
 
 export class Bot implements AsyncDisposable, BotInterface {
   private static readonly BackLogRE = />>\s+「\s+(バック)?ログ(\s+(?<count>[1-9]\d*))?\s+」/
   private static readonly EscapesRE = /(\x07|\x1b\[\d+m|\xef\xbb\xbf)/g
-  private static readonly TranslateRE = />>\s+「\s+翻訳\s+((?<lang>bg|cs|da|de|el|en|es|et|fi|fr|hu|id|it|ja|ko|lt|lv|nb|nl|pl|pt|ro|ru|sk|sl|sv|tr|uk|zh|bg|cs|da|de|el|en|es|et|fi|fr|hu|id|it|ja|ko|lt|lv|nb|nl|pl|pt|ro|ru|sk|sl|sv|tr|uk|zh)\s+)?(?<text>[^」]+)/i
+  private static readonly TranslateRE = />>\s+「\s+翻訳\s+((?<command>--(help|lang))|((?<lang>bg|cs|da|de|el|en|es|et|fi|fr|hu|id|it|ja|ko|lt|lv|nb|nl|pl|pt|ro|ru|sk|sl|sv|tr|uk|zh|bg|cs|da|de|el|en|es|et|fi|fr|hu|id|it|ja|ko|lt|lv|nb|nl|pl|pt|ro|ru|sk|sl|sv|tr|uk|zh)\s+)?(?<text>[^」]+))/i
 
   private static get LogKey(): string {
     return process.env.REDIS_LOG_KEY ?? 'koukoku'
@@ -40,7 +42,7 @@ export class Bot implements AsyncDisposable, BotInterface {
       if (!text.includes(' 〈＊あなた様＊〉')) {
         const patterns = [
           { e: Bot.BackLogRE, f: this.locateBacklogsAsync.bind(this) },
-          { e: Bot.TranslateRE, f: this.translateAsync.bind(this) },
+          { e: Bot.TranslateRE, f: this.translateOrDescribeAsync.bind(this) },
         ]
         for (const a of patterns) {
           const matched = text.match(a.e)
@@ -56,6 +58,18 @@ export class Bot implements AsyncDisposable, BotInterface {
     const log = text.replaceAll(Bot.EscapesRE, '').replaceAll('\r\n', '\n').replaceAll('\n', '').trim()
     if (this.threshold < log.length)
       await this.db.xAdd(Bot.LogKey, '*', { log })
+  }
+
+  private async createSpeechFromFileAsync(path: string): Promise<void> {
+    const data = await promisify(readFile)(path)
+    const text = data.toString().trim()
+    const time = Date.now().toString(16).slice(2, -2)
+    this.web.createSpeech(`[Bot@${time}] https://github.com/kei-g/koukoku-bot\n\n${text}`, this.send.bind(this))
+  }
+
+  private async describeTranslation(match: RegExpMatchArray): Promise<void> {
+    const name = match.groups.command.slice(2).toLowerCase()
+    await this.createSpeechFromFileAsync(`templates/translation/${name}.txt`)
   }
 
   get length(): Promise<number> {
@@ -125,6 +139,10 @@ export class Bot implements AsyncDisposable, BotInterface {
         const mutated = decode(converted, 'sjis')
         this.send(`[${name}から${to}翻訳] ${text == mutated ? text : Unicode.escape(text)}`)
       }
+  }
+
+  private async translateOrDescribeAsync(match: RegExpMatchArray): Promise<void> {
+    (match.groups.command ? this.describeTranslation : this.translateAsync).bind(this)(match)
   }
 
   private updateRecent(backlog: BackLog): void {
