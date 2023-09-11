@@ -27,7 +27,9 @@ export class Web implements Disposable {
 
   createSpeech(message: string, callback: (url: string) => void): void {
     const content = Buffer.from(message)
+    const salt = Buffer.from(new Date().toISOString(), 'ascii')
     const sha256 = createHash('sha256')
+    sha256.update(salt)
     sha256.update(content)
     const hash = sha256.digest().toString('hex')
     this.speeches.set(hash, { content, expires: new Date(Date.now() + 300000) })
