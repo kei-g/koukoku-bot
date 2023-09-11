@@ -5,7 +5,7 @@
   },
   "dependencies": {
     "@redis/client": "^1.5.9",
-    "esbuild-register": "^3.5.0"
+    "iconv-lite": "^0.6.3"
   },
   "description": "Bot for telnets://koukoku.shadan.open.ad.jp",
   "devDependencies": {
@@ -29,7 +29,7 @@
     "access": "restricted"
   },
   "scripts": {
-    "build": "esbuild src/main.ts --bundle --external:@redis/client --format=cjs --minify --outfile=dist/main.js --platform=node --target=es2022",
+    "build": "esbuild src/main.ts --bundle --external:@redis/client --external:iconv-lite --format=cjs --minify --outfile=dist/main.js --platform=node --target=es2022",
     "build:assets": "run-p build:assets:*",
     "build:assets:favicon": "tools/generate-favicon.sh",
     "build:assets:js": "esbuild src/assets/main.ts --format=esm --minify --outfile=assets/main.js --platform=browser --target=es2020",

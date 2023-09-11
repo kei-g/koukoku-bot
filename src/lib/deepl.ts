@@ -18,8 +18,8 @@ export namespace DeepL {
       return this.names.get(name)
     }
 
-    getName(code: string): string {
-      return this.codes.get(code.toLowerCase())
+    getName(code?: string): string {
+      return this.codes.get(code?.toLowerCase())
     }
   }
 
