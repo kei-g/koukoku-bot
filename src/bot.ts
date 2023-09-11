@@ -1,12 +1,13 @@
 import * as redis from '@redis/client'
 import * as tls from 'tls'
-import { BotInterface, KoukokuServer, Log, Web } from '.'
+import { BotInterface, DeepL, KoukokuServer, Log, Web, isDeepLError } from '.'
 import { EventEmitter } from 'stream'
 import { RedisCommandArgument } from '@redis/client/dist/lib/commands'
 
 export class Bot implements AsyncDisposable, BotInterface {
   private static readonly EscapesRE = /(\x07|\x1b\[\d+m|\xef\xbb\xbf)/g
   private static readonly LogRE = />>\s+「\s+(バック)?ログ(\s+(?<count>[1-9]\d*))?\s+」/
+  private static readonly TranslateRE = />>\s+「\s+翻訳\s+(?<text>[^」]+)/
 
   private static get LogKey(): string {
     return process.env.REDIS_LOG_KEY ?? 'koukoku'
@@ -34,10 +35,19 @@ export class Bot implements AsyncDisposable, BotInterface {
 
   private async acceptKoukoku(data: Buffer): Promise<void> {
     if (this.threshold < data.byteLength) {
-      const text = data.toString().replaceAll(' 〈＊あなた様＊〉', '')
-      const matched = text.match(Bot.LogRE)
-      const bound = [this.appendLogAsync.bind(this, text), this.locateLogsAsync.bind(this, matched)]
-      await bound[+(!!matched)]()
+      const text = data.toString().replaceAll(Bot.EscapesRE, '').replaceAll(/\r?\n/g, '')
+      if (!text.includes(' 〈＊あなた様＊〉')) {
+        const patterns = [
+          { e: Bot.LogRE, f: this.locateLogsAsync.bind(this) },
+          { e: Bot.TranslateRE, f: this.translateAsync.bind(this) },
+        ]
+        for (const a of patterns) {
+          const matched = text.match(a.e)
+          if (matched)
+            return await a.f(matched)
+        }
+        await this.appendLogAsync(text)
+      }
     }
   }
 
@@ -104,6 +114,17 @@ export class Bot implements AsyncDisposable, BotInterface {
     const store = this.acceptKoukoku.bind(this)
     this.pending.splice(0).forEach(store)
     this.client.on('data', store)
+  }
+
+  private async translateAsync(match: RegExpMatchArray): Promise<void> {
+    const r = await DeepL.translateAsync(match.groups.text)
+    if (isDeepLError(r))
+      this.send(`[Bot] 翻訳エラー, ${r.message}`)
+    else
+      for (const t of r.translations) {
+        const text = t.text.replaceAll('\r\n', '\n').replaceAll('\n', '').trim()
+        this.send(`[翻訳結果:${t.detected_source_language}] ${text}`)
+      }
   }
 
   private updateRecent(log: Log): void {
