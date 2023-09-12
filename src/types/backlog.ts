@@ -4,3 +4,5 @@ export type BackLog = {
     log: string
   }
 }
+
+export const selectBodyOfBackLog = (data: BackLog) => data.message.log
