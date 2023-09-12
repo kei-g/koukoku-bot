@@ -1,48 +1,75 @@
-import { BotInterface, Log, replaceVariables } from '.'
+import WebSocket from 'ws'
+import { BotInterface, Log, Speech, replaceVariables } from '.'
 import { IncomingMessage, Server, ServerResponse, createServer } from 'http'
-import { createHash } from 'crypto'
+import { WebSocket as WebSocketClient, WebSocketServer } from 'ws'
 import { join as joinPath } from 'path'
 import { promisify } from 'util'
 import { readFile, readdir } from 'fs'
 
 type AsyncFunction = () => Promise<void>
 
-type Speech = {
-  content: Buffer
-  expires: Date
-}
-
 export class Web implements Disposable {
   private readonly assets = new Map<string, Buffer>()
+  private readonly messages = new Array<string>()
+  private readonly pending = new WeakMap<WebSocketClient, Log[]>()
   private readonly server: Server
-  private readonly speeches = new Map<string, Speech>()
-  private readonly webPrefix: string
+  private readonly webClients = new Set<WebSocketClient>()
+  private readonly webSocket: WebSocketServer
 
   constructor(private readonly bot: BotInterface) {
     this.server = createServer()
     this.server.on('request', this.handleHttp2Request.bind(this))
     this.server.listen(this.port)
-    this.webPrefix = this.scheme + '://' + this.host
+    this.webSocket = new WebSocketServer({ server: this.server })
+    this.webSocket.on('connection', this.acceptWebSocket.bind(this))
   }
 
-  createSpeech(message: string, callback: (url: string) => void): void {
-    const content = Buffer.from(message)
-    const salt = Buffer.from(new Date().toISOString(), 'ascii')
-    const sha256 = createHash('sha256')
-    sha256.update(salt)
-    sha256.update(content)
-    const hash = sha256.digest().toString('hex')
-    this.speeches.set(hash, { content, expires: new Date(Date.now() + 300000) })
-    const url = this.webPrefix + '/logs/' + hash
-    callback(url)
+  private acceptWebSocket(client: WebSocketClient): void {
+    this.messages.push('connected from ' + client.url)
+    client.on('error', (error: Error) => this.messages.push('error: ' + error.message))
+    client.on('close', (code: number, reason: Buffer) => (this.messages.push('closed: ' + code.toString(16) + ', reason: 「' + reason.toString() + '」'), this.webClients.delete(client)))
+    client.on('message', (data: WebSocket.RawData, isBinary: boolean) => this.messages.push('data: ' + isBinary ? `${data.slice(0)}` : data.toString()))
+    client.on('open', () => this.messages.push('open'))
+    client.on('ping', (data: Buffer) => this.messages.push('ping: ' + data.toString()))
+    client.on('upgrade', (req: IncomingMessage) => this.messages.push('upgrade: ' + req.method + ' for ' + req.url))
+    this.webClients.add(client)
+    queueMicrotask(this.notifyWebClient.bind(this, client))
+  }
+
+  broadcast(value: Log): void {
+    if (value) {
+      const json = JSON.stringify(value)
+      const data = Buffer.from(json)
+      for (const client of this.webClients)
+        if (client.readyState === WebSocketClient.OPEN)
+          client.send(data)
+        else
+          this.enqueuePending(client, value)
+    }
+  }
+
+  private enqueuePending(client: WebSocketClient, ...data: Log[]): void {
+    const list = this.pending.get(client)
+    if (list)
+      list.unshift(...data.reverse())
+    else
+      this.pending.set(client, data)
+    setTimeout(this.flushPending.bind(this, client), 125)
+  }
+
+  private flushPending(client: WebSocketClient): void {
+    const list = this.pending.get(client)
+    if (list?.length) {
+      const json = JSON.stringify(list)
+      const data = Buffer.from(json)
+      client.readyState === WebSocketClient.OPEN ? (client.send(data), list.splice(0)) : setTimeout(this.flushPending.bind(this, client), 125)
+    }
   }
 
   private async handleGetRequest(request: IncomingMessage, response: ServerResponse): Promise<void> {
     const routes = {
       '': this.respondRootAsync.bind(this, request, response),
       'health': this.respondHealthAsync.bind(this, request, response),
-      'logs': this.respondLogAsync.bind(this, request, response),
-      'messages': this.respondMessagesAsync.bind(this, request, response),
       'status': this.respondStatusAsync.bind(this, request, response),
     } as Record<string, AsyncFunction>
     for (const name of this.assets.keys())
@@ -87,7 +114,7 @@ export class Web implements Disposable {
       response.statusCode = 403
   }
 
-  get host(): string {
+  private get host(): string {
     return process.env.HOST ?? 'localhost'
   }
 
@@ -96,6 +123,14 @@ export class Web implements Disposable {
       const data = await promisify(readFile)(joinPath('assets', name))
       this.assets.set(name, data)
     }
+  }
+
+  private notifyWebClient(client: WebSocketClient): void {
+    this.bot.notifyWebClient((data: Log[]) => {
+      const json = JSON.stringify(data)
+      const buffer = Buffer.from(json)
+      client.readyState === WebSocketClient.OPEN ? client.send(buffer) : this.enqueuePending(client, ...data)
+    })
   }
 
   get port(): number | undefined {
@@ -133,48 +168,15 @@ export class Web implements Disposable {
     return Promise.resolve()
   }
 
-  private async respondLogAsync(request: IncomingMessage, response: ServerResponse): Promise<void> {
-    const { url } = request
-    const names = url.split('/').slice(1)
-    const name = names.at(1)
-    if (this.speeches.has(name)) {
-      const speech = this.speeches.get(name)
-      const { content, expires } = speech
-      const remaining = expires.getTime() - Date.now()
-      if (remaining < 0) {
-        this.speeches.delete(name)
-        response.statusCode = 410
-        response.setHeader('Location', '/')
-      }
-      else {
-        setTimeout(this.speeches.delete.bind(this.speeches, name), remaining)
-        response.setHeader('Content-Type', 'text/plain; charset=utf8')
-        response.setHeader('Content-Length', content.byteLength)
-        response.setHeader('Expires', expires.toUTCString())
-        if (request.method === 'GET')
-          response.write(content)
-      }
-    }
-    else
-      response.statusCode = 404
-  }
-
-  private async respondMessagesAsync(request: IncomingMessage, response: ServerResponse): Promise<void> {
-    const list = (await this.bot.queryAsync('+', '-', { COUNT: 100 })).map((value: Log) => value.message.log)
-    const buf = Buffer.from(JSON.stringify(list))
-    response.statusCode = 200
-    response.setHeader('Content-Length', buf.byteLength)
-    response.setHeader('Content-Type', 'application/json')
-    if (request.method === 'GET')
-      response.write(buf)
-  }
-
   private async respondRootAsync(_request: IncomingMessage, response: ServerResponse): Promise<void> {
     await this.respondAssetFileForUrlAsync('/main.html', response)
   }
 
   private async respondStatusAsync(request: IncomingMessage, response: ServerResponse): Promise<void> {
-    const status = { logs: await this.bot.length, speeches: this.speeches.size }
+    const status = { messages: this.messages, speeches: this.bot.speeches }
+    status.speeches.forEach(
+      (speech: Speech) => speech.expiresAt = speech.expiresAt.toLocaleString()
+    )
     const json = JSON.stringify(status, undefined, 2)
     const resource = Buffer.from(json)
     response.setHeader('Content-Type', 'application/json')
@@ -183,11 +185,10 @@ export class Web implements Disposable {
       response.write(resource)
   }
 
-  get scheme(): string {
-    return process.env.WEBSCHEME ?? 'https'
-  }
-
   [Symbol.dispose](): void {
     this.server.close()
+    this.webClients.forEach((client: WebSocketClient) => client.close())
+    this.webClients.clear()
+    this.webSocket.close()
   }
 }

@@ -1,8 +1,9 @@
 import * as redis from '@redis/client'
 import * as tls from 'tls'
-import { BotInterface, DeepL, KoukokuServer, Log, Unicode, Web, isDeepLError, selectBodyOfBackLog } from '.'
+import { BotInterface, DeepL, GitHub, KoukokuServer, Log, Speech, Unicode, Web, isDeepLError, isGitHubResponse, selectBodyOfLog } from '.'
 import { EventEmitter } from 'stream'
 import { RedisCommandArgument } from '@redis/client/dist/lib/commands'
+import { createHash } from 'crypto'
 import { promisify } from 'util'
 import { readFile } from 'fs'
 
@@ -21,7 +22,8 @@ export class Bot implements AsyncDisposable, BotInterface {
   private readonly db: redis.RedisClientType
   private readonly lang = new DeepL.LanguageMap()
   private readonly pending = [] as Buffer[]
-  private readonly recent = { list: new Array<Log>(), map: new Map<string, Log>() }
+  private readonly recent = { list: [] as Log[], map: new Map<string, Log>() }
+  private readonly speechesSet = new Set<Speech>()
   private readonly web: Web
 
   constructor(server: KoukokuServer, private readonly threshold: number = 70) {
@@ -40,6 +42,8 @@ export class Bot implements AsyncDisposable, BotInterface {
   private async acceptKoukoku(data: Buffer): Promise<void> {
     if (this.threshold < data.byteLength) {
       const text = data.toString().replaceAll(Bot.EscapesRE, '').replaceAll(/\r?\n/g, '')
+      const log = await this.appendLogAsync(text.replaceAll(' 〈＊あなた様＊〉', ''))
+      this.web.broadcast(log)
       if (!text.includes(' 〈＊あなた様＊〉')) {
         const patterns = [
           { e: Bot.LogRE, f: this.locateLogsAsync.bind(this) },
@@ -51,21 +55,49 @@ export class Bot implements AsyncDisposable, BotInterface {
             await a.f(matched)
         }
       }
-      await this.appendLogAsync(text.replaceAll(' 〈＊あなた様＊〉', ''))
     }
   }
 
-  private async appendLogAsync(text: string): Promise<void> {
+  private async appendLogAsync(text: string): Promise<Log> {
     const log = text.replaceAll(Bot.EscapesRE, '').replaceAll('\r\n', '\n').replaceAll('\n', '').trim()
-    if (this.threshold < log.length)
-      await this.db.xAdd(Bot.LogKey, '*', { log })
+    if (this.threshold < log.length) {
+      const message = { log }
+      const id = await this.db.xAdd(Bot.LogKey, '*', message)
+      const obj = { id, message }
+      this.recent.list.unshift(obj)
+      this.recent.map.set(id, obj)
+      return obj
+    }
+  }
+
+  async createSpeechAsync(text: string): Promise<void> {
+    const now = new Date()
+    const salt = Buffer.from(now.toISOString(), 'ascii')
+    const sha256 = createHash('sha256')
+    sha256.update(salt)
+    sha256.update(text)
+    const hash = sha256.digest().toString('hex')
+    const response = await GitHub.uploadToGistAsync(hash, text)
+    if (isGitHubResponse(response)) {
+      const { id, rawUrl } = response
+      const speech = {
+        content: text,
+        expiresAt: new Date(now.getTime() + 300000),
+        id,
+        url: rawUrl,
+      }
+      this.speechesSet.add(speech)
+      this.send(rawUrl)
+    }
+    else
+      this.send('[Bot] 大演説の生成に失敗しました')
   }
 
   private async createSpeechFromFileAsync(path: string): Promise<void> {
     const data = await promisify(readFile)(path)
     const text = data.toString().trim()
     const time = Date.now().toString(16).slice(2, -2)
-    this.web.createSpeech(`[Bot@${time}] https://github.com/kei-g/koukoku-bot\n\n${text}`, this.send.bind(this))
+    await this.createSpeechAsync(`[Bot@${time}] https://github.com/kei-g/koukoku-bot\n\n${text}`)
   }
 
   private async describeLogAsync(match: RegExpMatchArray): Promise<void> {
@@ -87,12 +119,16 @@ export class Bot implements AsyncDisposable, BotInterface {
     if (command)
       return await this.describeLogAsync(matched)
     const contents = [] as string[]
-    for (const line of this.recent.list.map(selectBodyOfBackLog))
+    for (const line of this.recent.list.map(selectBodyOfLog))
       for (const m of line.matchAll(Bot.MessageRE)) {
         const text = `${m.groups.host.replaceAll(/(\*+[-.]?)+/g, '*.')}:${m.groups.msg}@${m.groups.time}`
         contents.push(text)
       }
-    this.web.createSpeech(contents.slice(0, Math.min(parseIntOr(count, 50), 50)).join('\n'), this.send.bind(this))
+    await this.createSpeechAsync(contents.slice(0, Math.min(parseIntOr(count, 50), 50)).join('\n'))
+  }
+
+  notifyWebClient(send: (data: Log[]) => void): void {
+    send(this.recent.list)
   }
 
   observe(target: EventEmitter): void {
@@ -114,19 +150,22 @@ export class Bot implements AsyncDisposable, BotInterface {
       this.pending.push(data)
   }
 
-  async queryAsync(start: RedisCommandArgument, end: RedisCommandArgument, options?: { COUNT?: number }): Promise<Log[]> {
+  private async queryAsync(start: RedisCommandArgument, end: RedisCommandArgument, options?: { COUNT?: number }): Promise<void> {
     if (50 < options?.COUNT)
       options.COUNT = 50
     const list = (await this.db.xRevRange(Bot.LogKey, start, end, options)).reverse() as unknown as Log[]
     list.forEach(this.updateRecent.bind(this))
     this.recent.list.sort((lhs: Log, rhs: Log) => [-1, 1][+(lhs.id < rhs.id)])
-    return list
   }
 
   private send(text: string): void {
     const line = text + '\n'
     process.stdout.write(line)
     this.client.write(line)
+  }
+
+  get speeches(): Speech[] {
+    return [...this.speechesSet]
   }
 
   async startAsync(): Promise<void> {
@@ -176,6 +215,8 @@ export class Bot implements AsyncDisposable, BotInterface {
     console.log('disposing bot...')
     console.log('disposing web...')
     this.web[Symbol.dispose]()
+    console.log('deleting gists...')
+    await Promise.all([...this.speechesSet].map(selectIdOfSpeech).map(GitHub.deleteGistAsync))
     console.log('disconnecting from database...')
     await this.db.disconnect()
     console.log('disconnecting from telnet server...')
@@ -188,3 +229,5 @@ const parseIntOr = (text: string, defaultValue: number, radix?: number) => {
   const c = parseInt(text, radix)
   return isNaN(c) ? defaultValue : c
 }
+
+const selectIdOfSpeech = (speech: Speech) => speech.id

@@ -5,6 +5,7 @@ class Client {
   readonly #loading: Element[]
   readonly #messages: HTMLUListElement
   readonly #removeChild: <T extends Node>(child: T) => T
+  #webSocket: WebSocket
 
   #prepend(data: Log): void {
     const li = this.#document.getElementById(data.id)
@@ -24,9 +25,20 @@ class Client {
     this.#removeChild = this.#messages.removeChild.bind(this.#messages)
   }
 
-  async connect(): Promise<void> {
-    const data = await fetchJSON('/messages', 'GET') as Log[]
-    data.forEach(this.#prepend.bind(this))
+  connect(): void {
+    this.#webSocket = new WebSocket('wss://' + this.#document.location.hostname)
+    this.#webSocket.addEventListener('close', this.connect.bind(this))
+    this.#webSocket.addEventListener('error', console.error)
+    this.#webSocket.addEventListener('open', console.log)
+    this.#webSocket.addEventListener(
+      'message',
+      async (msg: MessageEvent<WebSocketMessage>) => {
+        const data = JSON.parse(await msg.data.text())
+        data instanceof Array
+          ? data.slice(0, 100).reverse().map(this.#prepend.bind(this))
+          : this.#prepend(data)
+      }
+    )
   }
 
   async say(event: Event): Promise<void> {
@@ -52,6 +64,10 @@ class NodeListArray<T extends Node> extends Array<T> {
     for (let i = 0; i < nodes.length; i++)
       this[i] = nodes[i]
   }
+}
+
+interface WebSocketMessage {
+  text(): Promise<string>
 }
 
 const createListItemNode = (document: Document, id: string, message: string): HTMLLIElement => {
