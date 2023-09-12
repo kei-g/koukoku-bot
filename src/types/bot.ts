@@ -12,6 +12,12 @@ export interface BotInterface {
 
   /**
    *
+   * @param send
+   */
+  notifyWebClient(send: (data: BackLog[]) => void): void
+
+  /**
+   *
    * @param buffers
    *
    * @param resolve
@@ -22,4 +28,13 @@ export interface BotInterface {
    *
    */
   queryAsync(start: RedisCommandArgument, end: RedisCommandArgument, options?: { COUNT?: number }): Promise<BackLog[]>
+
+  get speeches(): Speech[]
+}
+
+export type Speech = {
+  content: string
+  expiresAt: Date | string
+  id: string
+  url: string
 }
