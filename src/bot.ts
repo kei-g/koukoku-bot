@@ -7,7 +7,7 @@ import { promisify } from 'util'
 import { readFile } from 'fs'
 
 export class Bot implements AsyncDisposable, BotInterface {
-  private static readonly BackLogRE = />>\s+「\s+(バック)?ログ(\s+(?<count>[1-9]\d*))?\s+」/
+  private static readonly BackLogRE = />>\s+「\s+(バック)?ログ(\s+((?<command>--help)|(?<count>[1-9]\d*)))?\s+」/
   private static readonly EscapesRE = /(\x07|\x1b\[\d+m|\xef\xbb\xbf)/g
   private static readonly MessageRE = />>\s「\s(?<msg>[^」]+)」\(チャット放話\s-\s(?<date>\d{2}\/\d{2}\s\([^)]+\))\s(?<time>\d{2}:\d{2}:\d{2})\sby\s(?<host>[^\s]+)\s君\)\s<</g
   private static readonly TranslateRE = />>\s+「\s+翻訳\s+((?<command>--(help|lang))|((?<lang>bg|cs|da|de|el|en|es|et|fi|fr|hu|id|it|ja|ko|lt|lv|nb|nl|pl|pt|ro|ru|sk|sl|sv|tr|uk|zh|bg|cs|da|de|el|en|es|et|fi|fr|hu|id|it|ja|ko|lt|lv|nb|nl|pl|pt|ro|ru|sk|sl|sv|tr|uk|zh)\s+)?(?<text>[^」]+))/i
@@ -68,6 +68,11 @@ export class Bot implements AsyncDisposable, BotInterface {
     this.web.createSpeech(`[Bot@${time}] https://github.com/kei-g/koukoku-bot\n\n${text}`, this.send.bind(this))
   }
 
+  private async describeBacklog(match: RegExpMatchArray): Promise<void> {
+    const name = match.groups.command.slice(2).toLowerCase()
+    await this.createSpeechFromFileAsync(`templates/backlog/${name}.txt`)
+  }
+
   private async describeTranslation(match: RegExpMatchArray): Promise<void> {
     const name = match.groups.command.slice(2).toLowerCase()
     await this.createSpeechFromFileAsync(`templates/translation/${name}.txt`)
@@ -78,7 +83,9 @@ export class Bot implements AsyncDisposable, BotInterface {
   }
 
   private async locateBacklogsAsync(matched: RegExpMatchArray): Promise<void> {
-    const { count } = matched.groups
+    const { command, count } = matched.groups
+    if (command)
+      return await this.describeBacklog(matched)
     const contents = new Array<string>()
     for (const line of this.recent.list.map(selectBodyOfBackLog))
       for (const m of line.matchAll(Bot.MessageRE)) {
