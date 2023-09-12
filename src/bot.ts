@@ -1,6 +1,6 @@
 import * as redis from '@redis/client'
 import * as tls from 'tls'
-import { BotInterface, DeepL, KoukokuServer, Log, Unicode, Web, isDeepLError } from '.'
+import { BotInterface, DeepL, KoukokuServer, Log, Unicode, Web, isDeepLError, selectBodyOfBackLog } from '.'
 import { RedisCommandArgument } from '@redis/client/dist/lib/commands'
 import { promisify } from 'util'
 import { readFile } from 'fs'
@@ -8,6 +8,7 @@ import { readFile } from 'fs'
 export class Bot implements AsyncDisposable, BotInterface {
   private static readonly EscapesRE = /(\x07|\x1b\[\d+m|\xef\xbb\xbf)/g
   private static readonly LogRE = />>\s+「\s+(バック)?ログ(\s+(?<count>[1-9]\d*))?\s+」/
+  private static readonly MessageRE = />>\s「\s(?<msg>[^」]+)」\(チャット放話\s-\s(?<date>\d{2}\/\d{2}\s\([^)]+\))\s(?<time>\d{2}:\d{2}:\d{2})\sby\s(?<host>[^\s]+)\s君\)\s<</g
   private static readonly TranslateRE = />>\s+「\s+翻訳\s+((?<command>--(help|lang))|((?<lang>bg|cs|da|de|el|en|es|et|fi|fr|hu|id|it|ja|ko|lt|lv|nb|nl|pl|pt|ro|ru|sk|sl|sv|tr|uk|zh|bg|cs|da|de|el|en|es|et|fi|fr|hu|id|it|ja|ko|lt|lv|nb|nl|pl|pt|ro|ru|sk|sl|sv|tr|uk|zh)\s+)?(?<text>[^」]+))/i
 
   private static get LogKey(): string {
@@ -77,11 +78,13 @@ export class Bot implements AsyncDisposable, BotInterface {
 
   private async locateLogsAsync(matched: RegExpMatchArray): Promise<void> {
     const { count } = matched.groups
-    const c = parseInt(count)
     const contents = [] as string[]
-    for (const data of await this.queryAsync('+', '-', { COUNT: isNaN(c) ? 50 : c }))
-      contents.push(data.message['log'] as string)
-    this.web.createSpeech(contents.join('\n'), this.send.bind(this))
+    for (const line of this.recent.list.map(selectBodyOfBackLog))
+      for (const m of line.matchAll(Bot.MessageRE)) {
+        const text = `${m.groups.host.replaceAll(/(\*+[-.]?)+/g, '*.')}:${m.groups.msg}@${m.groups.time}`
+        contents.push(text)
+      }
+    this.web.createSpeech(contents.slice(0, Math.min(parseIntOr(count, 50), 50)).join('\n'), this.send.bind(this))
   }
 
   post(buffers: Buffer[], resolve: () => void): void {
@@ -98,6 +101,8 @@ export class Bot implements AsyncDisposable, BotInterface {
   }
 
   async queryAsync(start: RedisCommandArgument, end: RedisCommandArgument, options?: { COUNT?: number }): Promise<Log[]> {
+    if (50 < options?.COUNT)
+      options.COUNT = 50
     const list = (await this.db.xRevRange(Bot.LogKey, start, end, options)).reverse() as unknown as Log[]
     list.forEach(this.updateRecent.bind(this))
     this.recent.list.sort((lhs: Log, rhs: Log) => [-1, 1][+(lhs.id < rhs.id)])
@@ -163,4 +168,9 @@ export class Bot implements AsyncDisposable, BotInterface {
     this.client.end()
     console.log('done')
   }
+}
+
+const parseIntOr = (text: string, defaultValue: number, radix?: number) => {
+  const c = parseInt(text, radix)
+  return isNaN(c) ? defaultValue : c
 }
