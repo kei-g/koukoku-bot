@@ -28,8 +28,6 @@ The scripts and documentation in this project are released under the [BSD-3-Clau
     - ```キーワード解除 わんこ``` to make this bot forget the keyword ```わんこ```
   - List the user defined commands.
     - ```キーワード一覧``` to make this bot generate a speech, ```わんこ わんわんお\nにゃんこ みゃーお```.
-- Web interface
-  - Support websocket.
 
 ## Contributions
 

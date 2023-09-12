@@ -10,5 +10,6 @@ const concatenateBuffers = <T>(resolve: (value: T) => void, response: IncomingMe
 export const receiveAsJsonAsync = <T>(request: ClientRequest, content: Buffer): Promise<T> => {
   const task = new Promise((resolve: (value: T) => void) => request.on('response', bind1st(resolve, concatenateBuffers)))
   request.write(content)
+  request.end()
   return task
 }
