@@ -21,7 +21,7 @@ export class Bot implements AsyncDisposable, BotInterface {
   private readonly db: redis.RedisClientType
   private readonly lang = new DeepL.LanguageMap()
   private readonly pending = [] as Buffer[]
-  private readonly recent = { list: [] as Log[], map: new Map<string, Log>() }
+  private readonly recent = { list: [] as Log[], map: new Map<string, Log>(), set: new Set<string>() }
   private readonly speechesSet = new Set<Speech>()
   private readonly web: Web
 
@@ -59,12 +59,13 @@ export class Bot implements AsyncDisposable, BotInterface {
 
   private async appendLogAsync(text: string): Promise<Log> {
     const log = text.replaceAll(Bot.EscapesRE, '').replaceAll('\r\n', '\n').replaceAll('\n', '').trim()
-    if (this.threshold < log.length) {
+    if (this.threshold < log.length && !this.recent.set.has(log)) {
       const message = { log }
       const id = await this.db.xAdd(Bot.LogKey, '*', message)
       const obj = { id, message }
       this.recent.list.unshift(obj)
       this.recent.map.set(id, obj)
+      this.recent.set.add(log)
       return obj
     }
   }
@@ -195,13 +196,14 @@ export class Bot implements AsyncDisposable, BotInterface {
   }
 
   private updateRecent(log: Log): void {
-    if (!this.recent.map.has(log.id)) {
+    if (!this.recent.set.has(log.message.log)) {
       const index = this.recent.list.findIndex((value: Log) => value.id < log.id)
       const rhs = this.recent.list.splice(index)
       this.recent.list.push(log)
       if (rhs.length)
         this.recent.list.push(...rhs)
       this.recent.map.set(log.id, log)
+      this.recent.set.add(log.message.log)
     }
   }
 
