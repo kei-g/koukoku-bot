@@ -24,8 +24,6 @@
     - ```キーワード解除 わんこ``` to make this bot forget the keyword ```わんこ```
   - List the user defined commands.
     - ```キーワード一覧``` to make this bot generate a speech, ```わんこ わんわんお\nにゃんこ みゃーお```.
-- web interface
-  - Support websocket.
 
 ## License
 

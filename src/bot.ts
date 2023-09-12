@@ -1,7 +1,8 @@
 import * as redis from '@redis/client'
 import * as tls from 'tls'
-import { BackLog, BotInterface, DeepL, KoukokuServer, Unicode, Web, isDeepLError, selectBodyOfBackLog } from '.'
+import { BackLog, BotInterface, DeepL, GitHub, KoukokuServer, Speech, Unicode, Web, isDeepLError, isGitHubResponse, selectBodyOfBackLog } from '.'
 import { RedisCommandArgument } from '@redis/client/dist/lib/commands'
+import { createHash } from 'crypto'
 import { decode, encode } from 'iconv-lite'
 import { promisify } from 'util'
 import { readFile } from 'fs'
@@ -22,6 +23,7 @@ export class Bot implements AsyncDisposable, BotInterface {
   private readonly lang = new DeepL.LanguageMap()
   private readonly pending = new Array<Buffer>()
   private readonly recent = { list: new Array<BackLog>(), map: new Map<string, BackLog>() }
+  private readonly speechesSet = new Set<Speech>()
   private readonly web: Web
 
   constructor(server: KoukokuServer, private readonly threshold: number = 70) {
@@ -51,21 +53,51 @@ export class Bot implements AsyncDisposable, BotInterface {
             await a.f(matched)
         }
       }
-      await this.appendLogAsync(text.replaceAll(' 〈＊あなた様＊〉', ''))
+      const backlog = await this.appendLogAsync(text.replaceAll(' 〈＊あなた様＊〉', ''))
+      this.web.broadcast(backlog)
     }
   }
 
-  private async appendLogAsync(text: string): Promise<void> {
+  private async appendLogAsync(text: string): Promise<BackLog> {
     const log = text.replaceAll(Bot.EscapesRE, '').replaceAll('\r\n', '\n').replaceAll('\n', '').trim()
-    if (this.threshold < log.length)
-      await this.db.xAdd(Bot.LogKey, '*', { log })
+    if (this.threshold < log.length) {
+      const message = { log }
+      const id = await this.db.xAdd(Bot.LogKey, '*', message)
+      const obj = { id, message }
+      this.recent.list.unshift(obj)
+      this.recent.map.set(id, obj)
+      return obj
+    }
+  }
+
+  async createSpeechAsync(text: string): Promise<void> {
+    const now = new Date()
+    const salt = Buffer.from(now.toISOString(), 'ascii')
+    const sha256 = createHash('sha256')
+    sha256.update(salt)
+    sha256.update(text)
+    const hash = sha256.digest().toString('hex')
+    const response = await GitHub.uploadToGistAsync(hash, text)
+    if (isGitHubResponse(response)) {
+      const { id, rawUrl } = response
+      const speech = {
+        content: text,
+        expiresAt: new Date(now.getTime() + 300000),
+        id,
+        url: rawUrl,
+      }
+      this.speechesSet.add(speech)
+      this.send(rawUrl)
+    }
+    else
+      this.send('[Bot] 大演説の生成に失敗しました')
   }
 
   private async createSpeechFromFileAsync(path: string): Promise<void> {
     const data = await promisify(readFile)(path)
     const text = data.toString().trim()
     const time = Date.now().toString(16).slice(2, -2)
-    this.web.createSpeech(`[Bot@${time}] https://github.com/kei-g/koukoku-bot\n\n${text}`, this.send.bind(this))
+    await this.createSpeechAsync(`[Bot@${time}] https://github.com/kei-g/koukoku-bot\n\n${text}`)
   }
 
   private async describeBacklog(match: RegExpMatchArray): Promise<void> {
@@ -92,7 +124,11 @@ export class Bot implements AsyncDisposable, BotInterface {
         const text = `${m.groups.host.replaceAll(/(\*+[-.]?)+/g, '*.')}:${m.groups.msg}@${m.groups.time}`
         contents.push(text)
       }
-    this.web.createSpeech(contents.slice(0, Math.min(parseIntOr(count, 50), 50)).join('\n'), this.send.bind(this))
+    await this.createSpeechAsync(contents.slice(0, Math.min(parseIntOr(count, 50), 50)).join('\n'))
+  }
+
+  notifyWebClient(send: (data: BackLog[]) => void): void {
+    send(this.recent.list)
   }
 
   post(buffers: Buffer[], resolve: () => void): void {
@@ -121,6 +157,10 @@ export class Bot implements AsyncDisposable, BotInterface {
     const line = text + '\n'
     process.stdout.write(line)
     this.client.write(line)
+  }
+
+  get speeches(): Speech[] {
+    return [...this.speechesSet]
   }
 
   async startAsync(): Promise<void> {
@@ -172,6 +212,8 @@ export class Bot implements AsyncDisposable, BotInterface {
     console.log('disposing bot...')
     console.log('disposing web...')
     this.web[Symbol.dispose]()
+    console.log('deleting gists...')
+    await Promise.all([...this.speechesSet].map(selectIdOfSpeech).map(GitHub.deleteGistAsync))
     console.log('disconnecting from database...')
     await this.db.disconnect()
     console.log('disconnecting from telnet server...')
@@ -184,3 +226,5 @@ const parseIntOr = (text: string, defaultValue: number, radix?: number) => {
   const c = parseInt(text, radix)
   return isNaN(c) ? defaultValue : c
 }
+
+const selectIdOfSpeech = (speech: Speech) => speech.id

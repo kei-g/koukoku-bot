@@ -1,4 +1,5 @@
 export * from './backlog'
 export * from './bot'
 export * from './deepl'
+export * from './github'
 export * from './koukoku-server'
