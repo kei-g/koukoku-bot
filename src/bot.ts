@@ -47,10 +47,10 @@ export class Bot implements AsyncDisposable, BotInterface {
         for (const a of patterns) {
           const matched = text.match(a.e)
           if (matched)
-            return await a.f(matched)
+            await a.f(matched)
         }
-        await this.appendLogAsync(text)
       }
+      await this.appendLogAsync(text.replaceAll(' 〈＊あなた様＊〉', ''))
     }
   }
 
