@@ -10,6 +10,7 @@ import { readFile } from 'fs'
 export class Bot implements AsyncDisposable, BotInterface {
   private static readonly BackLogRE = />>\s+「\s+(バック)?ログ(\s+((?<command>--help)|(?<count>[1-9]\d*)))?\s+」/
   private static readonly EscapesRE = /(\x07|\x1b\[\d+m|\xef\xbb\xbf)/g
+  private static readonly HelpRE = />>\s+「\s+(?<command>コマンド(リスト)?|ヘルプ)\s+[^」]*」/
   private static readonly MessageRE = />>\s「\s(?<msg>[^」]+)」\(チャット放話\s-\s(?<date>\d{2}\/\d{2}\s\([^)]+\))\s(?<time>\d{2}:\d{2}:\d{2})\sby\s(?<host>[^\s]+)\s君\)\s<</g
   private static readonly TranslateRE = />>\s+「\s+翻訳\s+((?<command>--(help|lang))|((?<lang>bg|cs|da|de|el|en|es|et|fi|fr|hu|id|it|ja|ko|lt|lv|nb|nl|pl|pt|ro|ru|sk|sl|sv|tr|uk|zh|bg|cs|da|de|el|en|es|et|fi|fr|hu|id|it|ja|ko|lt|lv|nb|nl|pl|pt|ro|ru|sk|sl|sv|tr|uk|zh)\s+)?(?<text>[^」]+))/i
 
@@ -45,6 +46,7 @@ export class Bot implements AsyncDisposable, BotInterface {
       if (!text.includes(' 〈＊あなた様＊〉')) {
         const patterns = [
           { e: Bot.BackLogRE, f: this.locateBacklogsAsync.bind(this) },
+          { e: Bot.HelpRE, f: this.describeGeneralHelp.bind(this) },
           { e: Bot.TranslateRE, f: this.translateOrDescribeAsync.bind(this) },
         ]
         for (const a of patterns) {
@@ -104,6 +106,10 @@ export class Bot implements AsyncDisposable, BotInterface {
   private async describeBacklog(match: RegExpMatchArray): Promise<void> {
     const name = match.groups.command.slice(2).toLowerCase()
     await this.createSpeechFromFileAsync(`templates/backlog/${name}.txt`)
+  }
+
+  private describeGeneralHelp(_match: RegExpMatchArray): Promise<void> {
+    return this.createSpeechFromFileAsync('templates/help.txt')
   }
 
   private async describeTranslation(match: RegExpMatchArray): Promise<void> {
