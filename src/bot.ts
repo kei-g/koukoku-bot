@@ -125,9 +125,10 @@ export class Bot implements AsyncDisposable, BotInterface {
     if (command)
       return await this.describeLogAsync(matched)
     const contents = [] as string[]
+    const last = {} as { host?: string, message?: string }
     for (const line of this.recent.list.map(selectBodyOfLog))
       for (const m of line.matchAll(Bot.MessageRE)) {
-        const text = `${m.groups.host.replaceAll(/(\*+[-.]?)+/g, '*.')}:${m.groups.msg}@${m.groups.time}`
+        const text = composeLog(last, m)
         contents.push(text)
       }
     await this.createSpeechAsync(contents.slice(0, Math.min(parseIntOr(count, 50), 50)).join('\n'))
@@ -225,6 +226,20 @@ export class Bot implements AsyncDisposable, BotInterface {
     this.client.end()
     console.log('done')
   }
+}
+
+const composeLog = (last: { host?: string, message?: string }, matched: RegExpMatchArray): string => {
+  const current = {
+    host: matched.groups.host.replaceAll(/(\*+[-.]?)+/g, ''),
+    message: matched.groups.msg.trim(),
+  }
+  current.host === last.host ? current.host = '〃' : last.host = current.host
+  current.message === last.message ? current.message = '〃' : last.message = current.message
+  return [
+    matched.groups.time,
+    current.message,
+    current.host,
+  ].join(' ')
 }
 
 const parseIntOr = (text: string, defaultValue: number, radix?: number) => {
