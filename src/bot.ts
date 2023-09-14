@@ -10,11 +10,16 @@ export class Bot implements AsyncDisposable, BotInterface {
   private static readonly EscapesRE = /(\x07|\x1b\[\d+m|\xef\xbb\xbf)/g
   private static readonly HelpRE = />>\s+「\s+(?<command>コマンド(リスト)?|ヘルプ)\s+[^」]*」/
   private static readonly LogRE = />>\s+「\s+(バック)?ログ(\s+((?<command>--help)|(?<count>[1-9]\d*)))?\s+」/
-  private static readonly MessageRE = />>\s「\s(?<msg>[^」]+)」\(チャット放話\s-\s(?<date>\d{2}\/\d{2}\s\([^)]+\))\s(?<time>\d{2}:\d{2}:\d{2})\sby\s(?<host>[^\s]+)\s君\)\s<</g
+  private static readonly MessageRE = />>\s「\s(?<msg>[^」]+)\s」\(チャット放話\s-\s(?<date>\d{2}\/\d{2}\s\([^)]+\))\s(?<time>\d{2}:\d{2}:\d{2})\sby\s(?<host>[^\s]+)\s君\)\s<</g
   private static readonly TranslateRE = />>\s+「\s+翻訳\s+((?<command>--(help|lang))|((?<lang>bg|cs|da|de|el|en|es|et|fi|fr|hu|id|it|ja|ko|lt|lv|nb|nl|pl|pt|ro|ru|sk|sl|sv|tr|uk|zh|bg|cs|da|de|el|en|es|et|fi|fr|hu|id|it|ja|ko|lt|lv|nb|nl|pl|pt|ro|ru|sk|sl|sv|tr|uk|zh)\s+)?(?<text>[^」]+))/i
+  private static readonly UserKeywordRE = />>\s「\sキーワード(?<command>一覧|登録|解除)?(\s(?<name>(--help|[\p{scx=Hiragana}\p{scx=Katakana}\p{scx=Han}\w]{1,8})))?(\s(?<value>[\p{scx=Hiragana}\p{scx=Katakana}\p{scx=Han}\s\w]+))?\s」/u
 
   private static get LogKey(): string {
     return process.env.REDIS_LOG_KEY ?? 'koukoku'
+  }
+
+  private static get UserKeywordKey(): string {
+    return process.env.REDIS_USERKEYWORD_KEY ?? 'keywords'
   }
 
   private readonly _bound: (data: Buffer) => void
@@ -24,6 +29,7 @@ export class Bot implements AsyncDisposable, BotInterface {
   private readonly pending = [] as Buffer[]
   private readonly recent = { list: [] as Log[], map: new Map<string, Log>(), set: new Set<string>() }
   private readonly speechesSet = new Set<Speech>()
+  private readonly userKeywords = new Set<string>()
   private readonly web: Web
 
   constructor(server: KoukokuServer, private readonly threshold: number = 70) {
@@ -44,18 +50,8 @@ export class Bot implements AsyncDisposable, BotInterface {
       const text = data.toString().replaceAll(Bot.EscapesRE, '').replaceAll(/\r?\n/g, '')
       const log = await this.appendLogAsync(text.replaceAll(' 〈＊あなた様＊〉', ''))
       this.web.broadcast(log)
-      if (!text.includes(' 〈＊あなた様＊〉')) {
-        const patterns = [
-          { e: Bot.HelpRE, f: this.describeGeneralHelp.bind(this) },
-          { e: Bot.LogRE, f: this.locateLogsAsync.bind(this) },
-          { e: Bot.TranslateRE, f: this.translateOrDescribeAsync.bind(this) },
-        ]
-        for (const a of patterns) {
-          const matched = text.match(a.e)
-          if (matched)
-            await a.f(matched)
-        }
-      }
+      if (!text.includes(' 〈＊あなた様＊〉') && !(await this.handleCanonicalCommandsAsync(text)))
+        await this.testUserKeywordsAsync(text)
     }
   }
 
@@ -72,13 +68,34 @@ export class Bot implements AsyncDisposable, BotInterface {
     }
   }
 
-  async createSpeechAsync(text: string): Promise<void> {
+  private async createLongUserKeywordsSpeechAsync(command: string, keywords: Map<string, string>): Promise<void> {
+    for (const keyword of keywords.keys())
+      this.userKeywords.add(keyword)
+    const now = new Date()
+    const list = [] as string[]
+    const date = now.toLocaleDateString('ja-JP-u-ca-japanese', { year: 'numeric', month: 'long', day: 'numeric' })
+    const time = now.toLocaleTimeString().split(':')
+    time.push('時', time.splice(1).join('分'), '秒')
+    list.push(`${date}${time.join('')}時点で登録されているキーワードの一覧は以下の通りです`)
+    list.push('')
+    for (const e of keywords)
+      list.push(`${e[0]} => ${e[1]}`)
+    if (keywords.size < 40)
+      await this.createSpeechAsync(list.join('\n'))
+    else {
+      const speech = await this.createSpeechAsync(list.join('\n'), 7, false)
+      const expiresAt = (speech.expiresAt as Date).toLocaleString()
+      this.send(`[Bot]キーワード${command}を${speech.url}に置きました,期限${expiresAt}`)
+    }
+  }
+
+  async createSpeechAsync(text: string, maxLength: number = 64, remark: boolean = true): Promise<Speech> {
     const now = new Date()
     const salt = Buffer.from(now.toISOString(), 'ascii')
     const sha256 = createHash('sha256')
     sha256.update(salt)
     sha256.update(text)
-    const hash = sha256.digest().toString('hex')
+    const hash = sha256.digest().toString('hex').slice(0, maxLength)
     const response = await GitHub.uploadToGistAsync(hash, text)
     if (isGitHubResponse(response)) {
       const { id, rawUrl } = response
@@ -89,7 +106,9 @@ export class Bot implements AsyncDisposable, BotInterface {
         url: rawUrl,
       }
       this.speechesSet.add(speech)
-      this.send(rawUrl)
+      if (remark)
+        this.send(rawUrl)
+      return speech
     }
     else
       this.send('[Bot] 大演説の生成に失敗しました')
@@ -100,6 +119,20 @@ export class Bot implements AsyncDisposable, BotInterface {
     const text = data.toString().trim()
     const time = Date.now().toString(16).slice(2, -2)
     await this.createSpeechAsync(`[Bot@${time}] https://github.com/kei-g/koukoku-bot\n\n${text}`)
+  }
+
+  private async createUserKeywordsSpeechAsync(command: string, keywords: Map<string, string>): Promise<void> {
+    this.userKeywords.clear()
+    if (keywords.size < 10) {
+      for (const keyword of keywords.keys())
+        this.userKeywords.add(keyword)
+      for (const e of keywords) {
+        this.send(`[Bot] キーワード "${e[0]} => ${e[1]}" が登録されています`)
+        await sleepAsync(3000)
+      }
+    }
+    else
+      await this.createLongUserKeywordsSpeechAsync(command, keywords)
   }
 
   private async describeLogAsync(match: RegExpMatchArray): Promise<void> {
@@ -116,8 +149,66 @@ export class Bot implements AsyncDisposable, BotInterface {
     await this.createSpeechFromFileAsync(`templates/translation/${name}.txt`)
   }
 
+  private async describeUserKeywordAsync(_match: RegExpMatchArray): Promise<void> {
+    return this.createSpeechFromFileAsync('templates/keyword/help.txt')
+  }
+
+  private determineUserKeywordCommandHandler<T>(match: RegExpMatchArray, template: Record<string, T>): string {
+    const { command, name, value } = match.groups
+    console.log({ command, name, value })
+    const u = +(command !== undefined && (command in template))
+    const v = +(command === undefined && name !== undefined)
+    console.log({ u, v })
+    return [null, name, command, null][u * 2 + v]
+  }
+
+  private getUserKeywordRepliesAsync(): Promise<string>[] {
+    return [...this.userKeywords].map(this.db.hGet.bind(this.db, Bot.UserKeywordKey))
+  }
+
+  private async handleCanonicalCommandsAsync(text: string): Promise<boolean> {
+    const patterns = [
+      { e: Bot.HelpRE, f: this.describeGeneralHelp.bind(this) },
+      { e: Bot.LogRE, f: this.locateLogsAsync.bind(this) },
+      { e: Bot.TranslateRE, f: this.translateOrDescribeAsync.bind(this) },
+      { e: Bot.UserKeywordRE, f: this.handleUserKeywordCommandAsync.bind(this) },
+    ]
+    const placeholder = { matched: false }
+    for (const a of patterns) {
+      const matched = text.match(a.e)
+      if (matched)
+        await a.f(matched)
+      placeholder.matched = !!matched
+    }
+    return placeholder.matched
+  }
+
+  private async handleUserKeywordCommandAsync(match: RegExpMatchArray): Promise<void> {
+    const template = {
+      '--help': this.describeUserKeywordAsync,
+      '一覧': this.listUserKeywordsAsync,
+      '登録': this.registerUserKeywordAsync,
+      '解除': this.unregisterUserKeywordAsync,
+    } as Record<string, (match: RegExpMatchArray) => Promise<void>>
+    const key = this.determineUserKeywordCommandHandler(match, template)
+    if (key in template) {
+      const t = template[key]
+      await t.bind(this)(match)
+    }
+  }
+
   get length(): Promise<number> {
     return this.db.xLen(Bot.LogKey)
+  }
+
+  private async listUserKeywordsAsync(match: RegExpMatchArray): Promise<void> {
+    const { command, name, value } = match.groups
+    if (name || value)
+      this.send(`[Bot]キーワード${command}の構文が正しくありません`)
+    else {
+      const keywords = createMap(await this.db.hGetAll(Bot.UserKeywordKey))
+      keywords.size ? await this.createUserKeywordsSpeechAsync(command, keywords) : this.send('[Bot] キーワードは登録されていません')
+    }
   }
 
   private async locateLogsAsync(matched: RegExpMatchArray): Promise<void> {
@@ -151,13 +242,27 @@ export class Bot implements AsyncDisposable, BotInterface {
       this.pending.push(data)
   }
 
-  async queryAsync(start: RedisCommandArgument, end: RedisCommandArgument, options?: { COUNT?: number }): Promise<Log[]> {
+  async queryLogAsync(start: RedisCommandArgument, end: RedisCommandArgument, options?: { COUNT?: number }): Promise<Log[]> {
     if (50 < options?.COUNT)
       options.COUNT = 50
     const list = (await this.db.xRevRange(Bot.LogKey, start, end, options)).reverse() as unknown as Log[]
     list.forEach(this.updateRecent.bind(this))
     this.recent.list.sort((lhs: Log, rhs: Log) => [-1, 1][+(lhs.id < rhs.id)])
     return list
+  }
+
+  private async queryUserKeywordsAsync(): Promise<void> {
+    this.userKeywords.clear()
+    for (const keyword of await this.db.hKeys(Bot.UserKeywordKey))
+      this.userKeywords.add(keyword)
+  }
+
+  private async registerUserKeywordAsync(match: RegExpMatchArray): Promise<void> {
+    const { command, name, value } = match.groups
+    const text = '[Bot]キーワード' + ((name && value) ? (` "${name}" ` + ['は既に登録されています', 'を登録しました'][+(await this.db.hSetNX(Bot.UserKeywordKey, name, value))]) : `${command}の構文が正しくありません`)
+    if (text.endsWith('を登録しました'))
+      this.userKeywords.add(name)
+    this.send(text)
   }
 
   private send(text: string): void {
@@ -174,7 +279,8 @@ export class Bot implements AsyncDisposable, BotInterface {
     await Promise.all(
       [
         this.db.connect(),
-        this.queryAsync('+', '-', { COUNT: 100 }),
+        this.queryUserKeywordsAsync(),
+        this.queryLogAsync('+', '-', { COUNT: 100 }),
         this.web.loadAssetsAsync(),
       ]
     )
@@ -182,6 +288,13 @@ export class Bot implements AsyncDisposable, BotInterface {
     const store = this.acceptKoukoku.bind(this)
     this.pending.splice(0).forEach(store)
     this.client.on('data', store)
+  }
+
+  private async testUserKeywordsAsync(text: string): Promise<void> {
+    const matched = [...text.matchAll(Bot.MessageRE)]
+    const toReply = this.getUserKeywordRepliesAsync.bind(this)
+    const replies = await Promise.all(matched.flatMap(toReply))
+    replies.forEach((reply: string) => this.send(`[Bot] ${reply}`))
   }
 
   private async translateAsync(match: RegExpMatchArray): Promise<void> {
@@ -200,6 +313,14 @@ export class Bot implements AsyncDisposable, BotInterface {
 
   private async translateOrDescribeAsync(match: RegExpMatchArray): Promise<void> {
     (match.groups.command ? this.describeTranslation : this.translateAsync).bind(this)(match)
+  }
+
+  private async unregisterUserKeywordAsync(match: RegExpMatchArray): Promise<void> {
+    const { command, name, value } = match.groups
+    const text = '[Bot]キーワード' + ((name && !value) ? (` "${name}" ` + ['は未登録です', 'を登録解除しました'][+(await this.db.hDel(Bot.UserKeywordKey, name))]) : `${command}の構文が正しくありません`)
+    if (text.endsWith('を登録解除しました'))
+      this.userKeywords.delete(name)
+    this.send(text)
   }
 
   private updateRecent(log: Log): void {
@@ -242,9 +363,20 @@ const composeLog = (last: { host?: string, message?: string }, matched: RegExpMa
   ].join(' ')
 }
 
+const createMap = (obj: { [key: string]: string }) => {
+  const map = new Map<string, string>()
+  for (const key in obj) {
+    const value = obj[key]
+    map.set(key, value)
+  }
+  return map
+}
+
 const parseIntOr = (text: string, defaultValue: number, radix?: number) => {
   const c = parseInt(text, radix)
   return isNaN(c) ? defaultValue : c
 }
 
 const selectIdOfSpeech = (speech: Speech) => speech.id
+
+const sleepAsync = (timeout: number) => new Promise<void>((resolve: () => void) => setTimeout(resolve, timeout))

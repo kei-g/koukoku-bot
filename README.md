@@ -30,6 +30,9 @@
 
 翻訳 --help
 * 翻訳に関するヘルプを表示する
+
+キーワード --help
+* キーワード機能に関するヘルプを表示する
 ```
 
 </details>
@@ -114,6 +117,39 @@
 
 </details>
 
+### User defined keywords
+
+- 行頭の `キーワード登録 名前 テキスト` に反応して、指定した名前に指定したテキストを反応させることができます
+  - 名前に使用できる文字はアルファベット・数字・ひらがな・カタカナ・漢字です
+  - 名前の長さは最大8文字です
+- `キーワード一覧` で登録済みのキーワードの一覧を見ることができます
+- 登録されたキーワードを解除したい場合は `キーワード解除 名前` とします
+- `キーワード --help` でキーワード機能に関する説明文を演説させることができます
+
+<details>
+<summary>演説内容</summary>
+
+```text
+キーワード --help
+* この説明を表示する
+
+キーワード登録 名前 テキスト
+* 名前に指定したキーワードに反応してテキストを返すようにする
+* 名前に使用できる文字はアルファベット・数字・ひらがな・カタカナ・漢字
+* 名前の長さは最大8文字
+* 登録済みのキーワードは解除してから登録しなおすとよい
+
+キーワード解除 名前
+* 登録した名前のキーワードを削除する
+
+キーワード一覧
+* 登録されたキーワードの一覧を表示する
+* 登録数が少ない場合は演説を流す
+* 多い場合はURLを発言する
+```
+
+</details>
+
 ## License
 
 The scripts and documentation in this project are released under the [BSD-3-Clause License][license-url]
@@ -126,13 +162,6 @@ The scripts and documentation in this project are released under the [BSD-3-Clau
 - Logging
   - Accept speeches.
     - Pool short data and accumulate them.
-- User defined keywords
-  - Register a new command.
-    - ```キーワード登録 わんこ わんわんお``` to make this bot respond ```[Bot] わんわんお``` for the keyword ```わんこ```
-  - Unregister the command.
-    - ```キーワード解除 わんこ``` to make this bot forget the keyword ```わんこ```
-  - List the user defined commands.
-    - ```キーワード一覧``` to make this bot generate a speech, ```わんこ わんわんお\nにゃんこ みゃーお```.
 
 ## Contributions
 
