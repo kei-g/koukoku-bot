@@ -17,13 +17,6 @@
 - calculation
   - Interpret arithmetic expression.
     - `計算 4+3` has to be answered as `[Bot] 4+3=7`
-- user defined keywords
-  - Register a new command.
-    - ```キーワード登録 わんこ わんわんお``` to make this bot respond ```[Bot] わんわんお``` for the keyword ```わんこ```
-  - Unregister the command.
-    - ```キーワード解除 わんこ``` to make this bot forget the keyword ```わんこ```
-  - List the user defined commands.
-    - ```キーワード一覧``` to make this bot generate a speech, ```わんこ わんわんお\nにゃんこ みゃーお```.
 
 ## Usage
 
@@ -43,6 +36,9 @@
 翻訳 --help
 
 * 翻訳に関する説明文を表示する
+
+キーワード --help
+* キーワード機能に関する説明文を表示する
 ```
 
 ### Logs
@@ -68,6 +64,27 @@
 翻訳 言語コード 文章
 * 文章を指定した言語に翻訳する
 * 言語コードを省略した場合は、英数記号以外を含む場合は英訳、それ以外は和訳する
+```
+
+### User defined keywords
+
+```text
+キーワード --help
+* この説明文を表示する
+
+キーワード登録 名前 テキスト
+* 名前に指定したキーワードに反応してテキストを返すようにする
+* 名前に使用できる文字はアルファベット・数字・ひらがな・カタカナ・漢字
+* 名前の長さは最大8文字
+* 登録済みのキーワードは解除してから登録しなおすとよい
+
+キーワード解除 名前
+* 登録した名前のキーワードを削除する
+
+キーワード一覧
+* 登録されたキーワードの一覧を表示する
+* 登録数が少ない場合は演説を流す
+* 多い場合はURLを発言する
 ```
 
 ## License

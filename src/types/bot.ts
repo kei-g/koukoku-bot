@@ -27,7 +27,7 @@ export interface BotInterface {
   /**
    *
    */
-  queryAsync(start: RedisCommandArgument, end: RedisCommandArgument, options?: { COUNT?: number }): Promise<BackLog[]>
+  queryLogAsync(start: RedisCommandArgument, end: RedisCommandArgument, options?: { COUNT?: number }): Promise<BackLog[]>
 
   get speeches(): Speech[]
 }
