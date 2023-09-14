@@ -218,7 +218,7 @@ export class Bot implements AsyncDisposable, BotInterface {
     const contents = [] as string[]
     const last = {} as { host?: string, message?: string }
     for (const line of this.recent.list.map(selectBodyOfLog))
-      for (const m of line.matchAll(Bot.MessageRE)) {
+      for (const m of filter(line.matchAll(Bot.MessageRE), isNotTimeSignal)) {
         const text = composeLog(last, m)
         contents.push(text)
       }
@@ -377,7 +377,15 @@ const createMap = (obj: { [key: string]: string }) => {
   return map
 }
 
+const filter = <T>(iterable: Iterable<T>, predicate: (value: T) => boolean) => function* () {
+  for (const value of iterable)
+    if (predicate(value))
+      yield value
+}()
+
 const insertItemBetweenEachElement = <U, V>(source: Iterable<U>, item: V): (U | V)[] => [...source].reduce((result: (U | V)[], current: U) => (result.push(item, current), result), []).slice(1)
+
+const isNotTimeSignal = (matched: RegExpMatchArray) => !matched.groups.msg.startsWith('[時報] ')
 
 const parseIntOr = (text: string, defaultValue: number, radix?: number) => {
   const c = parseInt(text, radix)
