@@ -25,6 +25,51 @@
   - List the user defined commands.
     - ```キーワード一覧``` to make this bot generate a speech, ```わんこ わんわんお\nにゃんこ みゃーお```.
 
+## Usage
+
+### Helps
+
+```text
+(コマンド)?リスト|ヘルプ
+
+* 下記の説明文を表示する
+```
+
+```text
+(バック)?ログ --help
+
+* 過去ログに関する説明文を表示する
+
+翻訳 --help
+
+* 翻訳に関する説明文を表示する
+```
+
+### Logs
+
+```text
+(バック)?ログ --help
+* この説明文を表示する
+
+(バック)?ログ 件数
+* 指定した件数の過去ログを最大50件まで表示する
+* 件数の指定がなければ50を省略したものとして扱う
+```
+
+### Translation
+
+```text
+翻訳 --help
+* この説明文を表示する
+
+翻訳 --lang
+* 言語コードの一覧を表示する
+
+翻訳 言語コード 文章
+* 文章を指定した言語に翻訳する
+* 言語コードを省略した場合は、英数記号以外を含む場合は英訳、それ以外は和訳する
+```
+
 ## License
 
 The scripts and documentation in this project are released under the [BSD-3-Clause License][license-url]
