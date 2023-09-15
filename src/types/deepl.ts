@@ -11,6 +11,8 @@ export type DeepLSuccess = {
   }[]
 }
 
-export const isDeepLError = (result: DeepLResult): result is DeepLError => 'message' in result
+export const isDeepLError = (result: DeepLResult | Error | string): result is DeepLError => isDeepLResult(result) && 'message' in result && typeof result.message === 'string'
 
-export const isDeepLSuccess = (result: DeepLResult): result is DeepLSuccess => 'translations' in result
+export const isDeepLResult = (result: DeepLResult | Error | string): result is DeepLResult => typeof result === 'object' && !(result instanceof Error) && ('message' in result || 'translations' in result)
+
+export const isDeepLSuccess = (result: DeepLResult | Error | string): result is DeepLSuccess => isDeepLResult(result) && 'translations' in result && typeof result.translations === 'object' && result.translations instanceof Array

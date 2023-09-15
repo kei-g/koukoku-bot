@@ -107,7 +107,9 @@ export class Web implements Disposable {
     if (url === '/post') {
       const list = new Array<Buffer>()
       request.on('data', list.push.bind(list))
-      await new Promise<void>((resolve: () => void) => request.on('end', this.bot.post.bind(this.bot, list, resolve)))
+      await new Promise<void>(
+        (resolve: () => void) => request.on('end', this.bot.postAsync.bind(this.bot, list, resolve))
+      )
       const ok = Buffer.from(JSON.stringify({ accepted: true }))
       response.statusCode = 202
       response.setHeader('Content-Length', ok.byteLength)

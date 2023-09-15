@@ -22,7 +22,7 @@ export interface BotInterface {
    *
    * @param resolve
    */
-  post(buffers: Buffer[], resolve: () => void): void
+  postAsync(buffers: Buffer[], resolve: () => void): Promise<void>
 
   /**
    *
