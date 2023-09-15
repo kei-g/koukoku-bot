@@ -96,7 +96,7 @@ export namespace DeepL {
     return true
   }
 
-  export const translateAsync = async (text: string, lang?: string): Promise<DeepLResult> => {
+  export const translateAsync = async (text: string, lang?: string): Promise<DeepLResult | Error | string> => {
     const content = Buffer.from(JSON.stringify({ text: [text], target_lang: lang ?? (mayBeAssumedAsEnglish(text) ? 'JA' : 'EN') }))
     const request = createRequest(
       {
