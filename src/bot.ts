@@ -1,6 +1,7 @@
 import * as redis from '@redis/client'
 import * as tls from 'tls'
 import { BackLog, BotInterface, DeepL, GitHub, KoukokuServer, Speech, Unicode, Web, isDeepLError, isGitHubResponse, selectBodyOfBackLog } from '.'
+import { KoukokuProxy } from './lib'
 import { RedisCommandArgument } from '@redis/client/dist/lib/commands'
 import { createHash } from 'crypto'
 import { decode, encode } from 'iconv-lite'
@@ -26,6 +27,7 @@ export class Bot implements AsyncDisposable, BotInterface {
   private readonly _bound: (data: Buffer) => void
   private readonly client: tls.TLSSocket
   private readonly db: redis.RedisClientType
+  private readonly interval: NodeJS.Timeout
   private readonly lang = new DeepL.LanguageMap()
   private readonly pending = new Array<Buffer>()
   private readonly recent = { list: new Array<BackLog>(), map: new Map<string, BackLog>(), set: new Set<string>() }
@@ -38,10 +40,11 @@ export class Bot implements AsyncDisposable, BotInterface {
     const port = server.port ?? 992
     const serverName = server.name ?? 'koukoku.shadan.open.ad.jp'
     const opts = { rejectUnauthorized: server.rejectUnauthorized }
-    this.client = tls.connect(port, serverName, opts, this.send.bind(this, 'nobody'))
+    this.client = tls.connect(port, serverName, opts, this.connected.bind(this))
     this.client.on('data', this._bound)
     this.client.setKeepAlive(true)
     this.client.setNoDelay(false)
+    this.interval = setInterval(KoukokuProxy.pingAsync, parseIntOr(process.env.PROXY_PING_INTERVAL, 120000))
     this.db = redis.createClient({ pingInterval: 15000, url: process.env.REDIS_URL })
     this.web = new Web(this)
   }
@@ -69,6 +72,10 @@ export class Bot implements AsyncDisposable, BotInterface {
     }
   }
 
+  private connected(): void {
+    this.client.write('nobody\r\n')
+  }
+
   private async createLongUserKeywordsSpeechAsync(command: string, keywords: Map<string, string>): Promise<void> {
     for (const keyword of keywords.keys())
       this.userKeywords.add(keyword)
@@ -86,7 +93,7 @@ export class Bot implements AsyncDisposable, BotInterface {
     else {
       const speech = await this.createSpeechAsync(list.join('\n'), 7, false)
       const expiresAt = (speech.expiresAt as Date).toLocaleString()
-      this.send(`[Bot]キーワード${command}を${speech.url}に置きました,期限${expiresAt}`)
+      await this.sendAsync(`[Bot]キーワード${command}を${speech.url}に置きました,期限${expiresAt}`)
     }
   }
 
@@ -108,11 +115,11 @@ export class Bot implements AsyncDisposable, BotInterface {
       }
       this.speechesSet.add(speech)
       if (remark)
-        this.send(rawUrl)
+        await this.sendAsync(rawUrl)
       return speech
     }
     else
-      this.send('[Bot] 大演説の生成に失敗しました')
+      await this.sendAsync('[Bot] 大演説の生成に失敗しました')
   }
 
   private async createSpeechFromFileAsync(path: string): Promise<void> {
@@ -128,7 +135,7 @@ export class Bot implements AsyncDisposable, BotInterface {
       for (const keyword of keywords.keys())
         this.userKeywords.add(keyword)
       for (const e of keywords) {
-        this.send(`[Bot] キーワード "${e[0]} => ${e[1]}" が登録されています`)
+        await this.sendAsync(`[Bot] キーワード "${e[0]} => ${e[1]}" が登録されています`)
         await sleepAsync(3000)
       }
     }
@@ -205,10 +212,10 @@ export class Bot implements AsyncDisposable, BotInterface {
   private async listUserKeywordsAsync(match: RegExpMatchArray): Promise<void> {
     const { command, name, value } = match.groups
     if (name || value)
-      this.send(`[Bot]キーワード${command}の構文が正しくありません`)
+      await this.sendAsync(`[Bot]キーワード${command}の構文が正しくありません`)
     else {
       const keywords = createMap(await this.db.hGetAll(Bot.UserKeywordKey))
-      keywords.size ? await this.createUserKeywordsSpeechAsync(command, keywords) : this.send('[Bot] キーワードは登録されていません')
+      keywords.size ? await this.createUserKeywordsSpeechAsync(command, keywords) : await this.sendAsync('[Bot] キーワードは登録されていません')
     }
   }
 
@@ -230,11 +237,11 @@ export class Bot implements AsyncDisposable, BotInterface {
     send(this.recent.list)
   }
 
-  post(buffers: Buffer[], resolve: () => void): void {
+  async postAsync(buffers: Buffer[], resolve: () => void): Promise<void> {
     const data = Buffer.concat(buffers).toString()
     const json = JSON.parse(data) as unknown as { msg: string, token: string }
     if (json?.token === process.env.TOKEN)
-      this.send(json?.msg?.trim())
+      await this.sendAsync(json?.msg?.trim())
     resolve()
   }
 
@@ -263,13 +270,13 @@ export class Bot implements AsyncDisposable, BotInterface {
     const text = '[Bot]キーワード' + ((name && value) ? (` "${name}" ` + ['は既に登録されています', 'を登録しました'][+(await this.db.hSetNX(Bot.UserKeywordKey, name, value))]) : `${command}の構文が正しくありません`)
     if (text.endsWith('を登録しました'))
       this.userKeywords.add(name)
-    this.send(text)
+    await this.sendAsync(text)
   }
 
-  private send(text: string): void {
-    const line = text + '\n'
-    process.stdout.write(line)
-    this.client.write(line)
+  private async sendAsync(text: string): Promise<void> {
+    process.stdout.write(text + '\n')
+    this.client.write('ping\r\n')
+    await KoukokuProxy.sendAsync(text)
   }
 
   get speeches(): Speech[] {
@@ -295,7 +302,7 @@ export class Bot implements AsyncDisposable, BotInterface {
     const matched = [...text.matchAll(Bot.MessageRE)]
     const toReply = this.getUserKeywordRepliesAsync.bind(this)
     const replies = await Promise.all(matched.flatMap(toReply))
-    replies.forEach((reply: string) => this.send(`[Bot] ${reply}`))
+    await Promise.all(replies.map((reply: string) => this.sendAsync(`[Bot] ${reply}`)))
   }
 
   private async translateAsync(match: RegExpMatchArray): Promise<void> {
@@ -303,14 +310,14 @@ export class Bot implements AsyncDisposable, BotInterface {
     const to = this.lang.getName(lang)?.concat('に') ?? ''
     const r = await DeepL.translateAsync(decodeURI(text), lang)
     if (isDeepLError(r))
-      this.send(r.message)
+      await this.sendAsync(r.message)
     else
       for (const t of r.translations) {
         const name = this.lang.getName(t.detected_source_language)
         const text = t.text.replaceAll('\r\n', '\n').replaceAll('\n', '').trim()
         const converted = encode(text, 'sjis')
         const mutated = decode(converted, 'sjis')
-        this.send(`[${name}から${to}翻訳] ${text == mutated ? text : Unicode.escape(text)}`)
+        await this.sendAsync(`[${name}から${to}翻訳] ${text == mutated ? text : Unicode.escape(text)}`)
       }
   }
 
@@ -323,7 +330,7 @@ export class Bot implements AsyncDisposable, BotInterface {
     const text = '[Bot]キーワード' + ((name && !value) ? (` "${name}" ` + ['は未登録です', 'を登録解除しました'][+(await this.db.hDel(Bot.UserKeywordKey, name))]) : `${command}の構文が正しくありません`)
     if (text.endsWith('を登録解除しました'))
       this.userKeywords.delete(name)
-    this.send(text)
+    await this.sendAsync(text)
   }
 
   private updateRecent(backlog: BackLog): void {
@@ -340,6 +347,7 @@ export class Bot implements AsyncDisposable, BotInterface {
 
   async [Symbol.asyncDispose](): Promise<void> {
     console.log('disposing bot...')
+    clearInterval(this.interval)
     console.log('disposing web...')
     this.web[Symbol.dispose]()
     console.log('deleting gists...')
