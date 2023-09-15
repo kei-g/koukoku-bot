@@ -125,8 +125,8 @@ export class Web implements Disposable {
     }
   }
 
-  private notifyWebClient(client: WebSocketClient): void {
-    this.bot.notifyWebClient((data: Log[]) => {
+  private async notifyWebClient(client: WebSocketClient): Promise<void> {
+    await this.bot.notifyWebClient(async (data: Log[]) => {
       const json = JSON.stringify(data)
       const buffer = Buffer.from(json)
       client.readyState === WebSocketClient.OPEN ? client.send(buffer) : this.enqueuePending(client, ...data)

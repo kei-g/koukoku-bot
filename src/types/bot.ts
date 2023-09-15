@@ -14,7 +14,7 @@ export interface BotInterface {
    *
    * @param send
    */
-  notifyWebClient(send: (data: Log[]) => void): void
+  notifyWebClient(send: (data: Log[]) => Promise<void>): Promise<void>
 
   /**
    *
