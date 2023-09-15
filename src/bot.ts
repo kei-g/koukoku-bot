@@ -303,9 +303,10 @@ export class Bot implements AsyncDisposable, BotInterface {
   }
 
   private async translateAsync(match: RegExpMatchArray): Promise<void> {
-    const { lang, text } = match.groups
+    const { lang } = match.groups
+    const text = match.groups.text.replaceAll(/(\s+%|\s+%\s+|%\s+)/g, '%')
     const to = this.lang.getName(lang)?.concat('に') ?? ''
-    const r = await DeepL.translateAsync(text, lang)
+    const r = await DeepL.translateAsync(decodeURI(text), lang)
     if (isDeepLError(r))
       this.send(`[Bot] 翻訳エラー, ${r.message}`)
     else
