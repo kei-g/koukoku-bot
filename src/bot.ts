@@ -1,6 +1,6 @@
 import * as redis from '@redis/client'
 import * as tls from 'tls'
-import { BackLog, BotInterface, DeepL, GitHub, KoukokuServer, Speech, Unicode, Web, isDeepLError, isGitHubResponse, selectBodyOfBackLog } from '.'
+import { BackLog, BotInterface, DeepL, GitHub, IgnorePattern, KoukokuServer, Speech, Unicode, Web, compileIgnorePattern, isDeepLError, isGitHubResponse, selectBodyOfBackLog, shouldBeIgnored } from '.'
 import { KoukokuProxy } from './lib'
 import { RedisCommandArgument } from '@redis/client/dist/lib/commands'
 import { createHash } from 'crypto'
@@ -27,6 +27,7 @@ export class Bot implements AsyncDisposable, BotInterface {
   private readonly _bound: (data: Buffer) => void
   private readonly client: tls.TLSSocket
   private readonly db: redis.RedisClientType
+  private readonly ignorePatterns = [] as IgnorePattern[]
   private readonly interval: NodeJS.Timeout
   private readonly lang = new DeepL.LanguageMap()
   private readonly pending = new Array<Buffer>()
@@ -170,8 +171,8 @@ export class Bot implements AsyncDisposable, BotInterface {
     return [null, name, command, null][u * 2 + v]
   }
 
-  private getUserKeywordRepliesAsync(): Promise<string>[] {
-    return [...this.userKeywords].map(this.db.hGet.bind(this.db, Bot.UserKeywordKey))
+  private getUserKeywordRepliesAsync(includes: Predicate<string>): Promise<string>[] {
+    return [...this.userKeywords].filter(includes).map(this.db.hGet.bind(this.db, Bot.UserKeywordKey))
   }
 
   private async handleCanonicalCommandsAsync(text: string): Promise<boolean> {
@@ -216,6 +217,17 @@ export class Bot implements AsyncDisposable, BotInterface {
     else {
       const keywords = createMap(await this.db.hGetAll(Bot.UserKeywordKey))
       keywords.size ? await this.createUserKeywordsSpeechAsync(command, keywords) : await this.sendAsync('[Bot] キーワードは登録されていません')
+    }
+  }
+
+  private async loadIgnorePatternsAsync(): Promise<void> {
+    const data = await promisify(readFile)('conf/ignore.json')
+    const text = data.toString()
+    const config = JSON.parse(text) as { ignorePatterns: IgnorePattern[] }
+    if ('ignorePatterns' in config) {
+      const patterns = config.ignorePatterns.map(compileIgnorePattern).filter((pattern: IgnorePattern | undefined) => pattern !== undefined)
+      this.ignorePatterns.splice(0)
+      this.ignorePatterns.push(...patterns)
     }
   }
 
@@ -279,6 +291,10 @@ export class Bot implements AsyncDisposable, BotInterface {
     await KoukokuProxy.sendAsync(text)
   }
 
+  private shouldBeAccepted(matched: RegExpMatchArray): boolean {
+    return !shouldBeIgnored(matched, this.ignorePatterns)
+  }
+
   get speeches(): Speech[] {
     return [...this.speechesSet]
   }
@@ -289,6 +305,7 @@ export class Bot implements AsyncDisposable, BotInterface {
         this.db.connect(),
         this.queryUserKeywordsAsync(),
         this.queryLogAsync('+', '-', { COUNT: 100 }),
+        this.loadIgnorePatternsAsync(),
         this.web.loadAssetsAsync(),
       ]
     )
@@ -300,8 +317,10 @@ export class Bot implements AsyncDisposable, BotInterface {
 
   private async testUserKeywordsAsync(text: string): Promise<void> {
     const matched = [...text.matchAll(Bot.MessageRE)]
+    const acceptable = this.shouldBeAccepted.bind(this)
+    const toPredicate = bindToFilterIncludedByMessage
     const toReply = this.getUserKeywordRepliesAsync.bind(this)
-    const replies = await Promise.all(matched.flatMap(toReply))
+    const replies = await Promise.all(matched.filter(acceptable).flatMap(toPredicate).flatMap(toReply))
     await Promise.all(replies.map((reply: string) => this.sendAsync(`[Bot] ${reply}`)))
   }
 
@@ -360,6 +379,10 @@ export class Bot implements AsyncDisposable, BotInterface {
   }
 }
 
+type Predicate<T> = (value: T) => boolean
+
+const bindToFilterIncludedByMessage = (matched: RegExpMatchArray) => matched.groups.msg.includes.bind(matched.groups.msg)
+
 const composeBackLog = (last: { host?: string, message?: string }, matched: RegExpMatchArray): string => {
   const current = {
     host: matched.groups.host.replaceAll(/(\*+[-.]?)+/g, ''),
@@ -373,6 +396,7 @@ const composeBackLog = (last: { host?: string, message?: string }, matched: RegE
     current.host,
   ].join(' ')
 }
+
 const createMap = (obj: { [key: string]: string }) => {
   const map = new Map<string, string>()
   for (const key in obj) {
