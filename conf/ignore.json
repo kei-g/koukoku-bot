@@ -1,0 +1,22 @@
+{
+  "ignorePatterns": [
+    {
+      "name": "AWS 西アメリカ 完全一致",
+      "target": "host",
+      "type": "exact",
+      "value": "***-**-***-***-***.us-west-2.compute.amazonaws.com"
+    },
+    {
+      "name": "AWS 西アメリカ 正規表現",
+      "target": "host",
+      "type": "regexp",
+      "value": "^\\*+(-\\*+)*\\.us\\-west\\-2\\.compute\\.amazonaws\\.com$"
+    },
+    {
+      "name": "先頭の[Bot]に一致",
+      "target": "msg",
+      "type": "regexp",
+      "value": "^\\[Bot\\]"
+    }
+  ]
+}
