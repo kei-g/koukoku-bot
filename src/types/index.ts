@@ -1,6 +1,7 @@
 export * from './bot'
 export * from './deepl'
 export * from './github'
+export * from './ignore'
 export * from './koukoku-server'
 export * from './log'
 export * from './proxy'

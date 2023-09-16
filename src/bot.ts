@@ -1,6 +1,6 @@
 import * as redis from '@redis/client'
 import * as tls from 'tls'
-import { BotInterface, DeepL, GitHub, KoukokuProxy, KoukokuServer, Log, Speech, Unicode, Web, isDeepLError, isDeepLSuccess, isGitHubResponse, selectBodyOfLog } from '.'
+import { BotInterface, DeepL, GitHub, IgnorePattern, KoukokuProxy, KoukokuServer, Log, Speech, Unicode, Web, compileIgnorePattern, isDeepLError, isDeepLSuccess, isGitHubResponse, selectBodyOfLog, shouldBeIgnored } from '.'
 import { EventEmitter } from 'stream'
 import { RedisCommandArgument } from '@redis/client/dist/lib/commands'
 import { createHash } from 'crypto'
@@ -26,6 +26,7 @@ export class Bot implements AsyncDisposable, BotInterface {
   private readonly _bound: (data: Buffer) => void
   private readonly client: tls.TLSSocket
   private readonly db: redis.RedisClientType
+  private readonly ignorePatterns = [] as IgnorePattern[]
   private readonly interval: NodeJS.Timeout
   private readonly lang = new DeepL.LanguageMap()
   private readonly pending = [] as Buffer[]
@@ -153,8 +154,8 @@ export class Bot implements AsyncDisposable, BotInterface {
     return [null, name, command, null][u * 2 + v]
   }
 
-  private getUserKeywordRepliesAsync(): Promise<string>[] {
-    return [...this.userKeywords].map(this.db.hGet.bind(this.db, Bot.UserKeywordKey))
+  private getUserKeywordRepliesAsync(includes: Predicate<string>): Promise<string>[] {
+    return [...this.userKeywords].filter(includes).map(this.db.hGet.bind(this.db, Bot.UserKeywordKey))
   }
 
   private async handleCanonicalCommandsAsync(text: string): Promise<boolean> {
@@ -215,6 +216,17 @@ export class Bot implements AsyncDisposable, BotInterface {
         await this.sendAsync('[Bot] 登録されているキーワードは以上です')
       }
     )
+  }
+
+  private async loadIgnorePatternsAsync(): Promise<void> {
+    const data = await promisify(readFile)('conf/ignore.json')
+    const text = data.toString()
+    const config = JSON.parse(text) as { ignorePatterns: IgnorePattern[] }
+    if ('ignorePatterns' in config) {
+      const patterns = config.ignorePatterns.map(compileIgnorePattern).filter((pattern: IgnorePattern | undefined) => pattern !== undefined)
+      this.ignorePatterns.splice(0)
+      this.ignorePatterns.push(...patterns)
+    }
   }
 
   private async locateLogsAsync(matched: RegExpMatchArray): Promise<void> {
@@ -282,6 +294,10 @@ export class Bot implements AsyncDisposable, BotInterface {
     await KoukokuProxy.sendAsync(text)
   }
 
+  private shouldBeAccepted(matched: RegExpMatchArray): boolean {
+    return !shouldBeIgnored(matched, this.ignorePatterns)
+  }
+
   get speeches(): Speech[] {
     return [...this.speechesSet]
   }
@@ -292,6 +308,7 @@ export class Bot implements AsyncDisposable, BotInterface {
         this.db.connect(),
         this.queryUserKeywordsAsync(),
         this.queryLogAsync('+', '-', { COUNT: 100 }),
+        this.loadIgnorePatternsAsync(),
         this.web.loadAssetsAsync(),
       ]
     )
@@ -303,8 +320,10 @@ export class Bot implements AsyncDisposable, BotInterface {
 
   private async testUserKeywordsAsync(text: string): Promise<void> {
     const matched = [...text.matchAll(Bot.MessageRE)]
+    const acceptable = this.shouldBeAccepted.bind(this)
+    const toPredicate = bindToFilterIncludedByMessage
     const toReply = this.getUserKeywordRepliesAsync.bind(this)
-    const replies = await Promise.all(matched.flatMap(toReply))
+    const replies = await Promise.all(matched.filter(acceptable).flatMap(toPredicate).flatMap(toReply))
     await Promise.all(replies.map((reply: string) => this.sendAsync(`[Bot] ${reply}`)))
   }
 
@@ -361,6 +380,10 @@ export class Bot implements AsyncDisposable, BotInterface {
     console.log('done')
   }
 }
+
+type Predicate<T> = (value: T) => boolean
+
+const bindToFilterIncludedByMessage = (matched: RegExpMatchArray) => matched.groups.msg.includes.bind(matched.groups.msg)
 
 const composeLog = (last: { host?: string, message?: string }, matched: RegExpMatchArray): string => {
   const current = {
