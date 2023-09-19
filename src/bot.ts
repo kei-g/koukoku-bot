@@ -8,13 +8,12 @@ import { promisify } from 'util'
 import { readFile } from 'fs'
 
 export class Bot implements AsyncDisposable, BotInterface {
-  private static readonly CalcRE = />>\s「\s計算\s(?<expr>[\d\s.+\-*/%()]+)」/
-  private static readonly EscapesRE = /(\x07|\x1b\[\d+m|\xef\xbb\xbf)/g
-  private static readonly HelpRE = />>\s+「\s+(?<command>コマンド(リスト)?|ヘルプ)\s+[^」]*」/
-  private static readonly LogRE = />>\s+「\s+(バック)?ログ(\s+((?<command>--help)|(?<count>[1-9]\d*)))?\s+」/
-  private static readonly MessageRE = />>\s「\s(?<msg>[^」]+)\s」\(チャット放話\s-\s(?<date>\d{2}\/\d{2}\s\([^)]+\))\s(?<time>\d{2}:\d{2}:\d{2})\sby\s(?<host>[^\s]+)\s君\)\s<</g
-  private static readonly TranslateRE = />>\s+「\s+翻訳\s+((?<command>--(help|lang))|((?<lang>bg|cs|da|de|el|en|es|et|fi|fr|hu|id|it|ja|ko|lt|lv|nb|nl|pl|pt|ro|ru|sk|sl|sv|tr|uk|zh|bg|cs|da|de|el|en|es|et|fi|fr|hu|id|it|ja|ko|lt|lv|nb|nl|pl|pt|ro|ru|sk|sl|sv|tr|uk|zh)\s+)?(?<text>[^」]+))/i
-  private static readonly UserKeywordRE = />>\s「\sキーワード(?<command>一覧|登録|解除)?(\s(?<name>(--help|[\p{scx=Hiragana}\p{scx=Katakana}\p{scx=Han}\w]{1,8})))?(\s(?<value>[\p{scx=Hiragana}\p{scx=Katakana}\p{scx=Han}\s\w]+))?\s」/u
+  private static readonly CalcRE = /^計算\s(?<expr>[\d\s.+\-*/%()]+)$/
+  private static readonly HelpRE = /^(?<command>コマンド(リスト)?|ヘルプ)$/
+  private static readonly LogRE = /^(バック)?ログ(\s+((?<command>--help)|(?<count>[1-9]\d*)))?$/
+  private static readonly MessageRE = />>\s「\s(?<msg>[^」]+)\s」\(チャット放話\s-\s(?<date>\d\d\/\d\d\s\([^)]+\))\s(?<time>\d\d:\d\d:\d\d)\sby\s(?<host>[^\s]+)\s君(\s(?<self>〈＊あなた様＊〉))?\)\s<</g
+  private static readonly TranslateRE = /^翻訳\s+((?<command>--(help|lang))|((?<lang>bg|cs|da|de|el|en|es|et|fi|fr|hu|id|it|ja|ko|lt|lv|nb|nl|pl|pt|ro|ru|sk|sl|sv|tr|uk|zh|bg|cs|da|de|el|en|es|et|fi|fr|hu|id|it|ja|ko|lt|lv|nb|nl|pl|pt|ro|ru|sk|sl|sv|tr|uk|zh)\s+)?(?<text>.+))$/i
+  private static readonly UserKeywordRE = /^キーワード(?<command>一覧|登録|解除)?(\s(?<name>(--help|[\p{scx=Hiragana}\p{scx=Katakana}\p{scx=Han}\w]{1,8})))?(\s(?<value>[\p{scx=Hiragana}\p{scx=Katakana}\p{scx=Han}\s\w]+))?$/u
 
   private static get LogKey(): string {
     return process.env.REDIS_LOG_KEY ?? 'koukoku'
@@ -51,26 +50,26 @@ export class Bot implements AsyncDisposable, BotInterface {
   }
 
   private async acceptKoukoku(data: Buffer): Promise<void> {
-    if (this.threshold < data.byteLength) {
-      const text = data.toString().replaceAll(Bot.EscapesRE, '').replaceAll(/\r?\n/g, '')
-      const log = await this.appendLogAsync(text.replaceAll(' 〈＊あなた様＊〉', ''))
-      this.web.broadcast(log)
-      if (!text.includes(' 〈＊あなた様＊〉') && !(await this.handleCanonicalCommandsAsync(text)))
-        await this.testUserKeywordsAsync(text)
-    }
+    if (this.threshold < data.byteLength)
+      for (const matched of data.toString().replaceAll(/\r?\n/g, '').matchAll(Bot.MessageRE)) {
+        console.log(matched)
+        const log = await this.appendLogAsync(matched[0])
+        this.web.broadcast(log)
+        const { groups } = matched
+        const g = groups
+        if (!g.self && !(await this.handleCanonicalCommandsAsync(g.msg)))
+          await this.testUserKeywordsAsync(matched)
+      }
   }
 
   private async appendLogAsync(text: string): Promise<Log> {
-    const log = text.replaceAll(Bot.EscapesRE, '').replaceAll('\r\n', '\n').replaceAll('\n', '').trim()
-    if (this.threshold < log.length && !this.recent.set.has(log)) {
-      const message = { log }
-      const id = await this.db.xAdd(Bot.LogKey, '*', message)
-      const obj = { id, message }
-      this.recent.list.unshift(obj)
-      this.recent.map.set(id, obj)
-      this.recent.set.add(log)
-      return obj
-    }
+    const message = { log: text }
+    const id = await this.db.xAdd(Bot.LogKey, '*', message)
+    const obj = { id, message }
+    this.recent.list.unshift(obj)
+    this.recent.map.set(id, obj)
+    this.recent.set.add(text)
+    return obj
   }
 
   private async calculateAsync(matched: RegExpMatchArray): Promise<void> {
@@ -339,13 +338,15 @@ export class Bot implements AsyncDisposable, BotInterface {
     this.client.on('data', store)
   }
 
-  private async testUserKeywordsAsync(text: string): Promise<void> {
-    const matched = [...text.matchAll(Bot.MessageRE)]
-    const acceptable = this.shouldBeAccepted.bind(this)
-    const toPredicate = bindToFilterIncludedByMessage
-    const toReply = this.getUserKeywordRepliesAsync.bind(this)
-    const replies = await Promise.all(matched.filter(acceptable).flatMap(toPredicate).flatMap(toReply))
-    await Promise.all(replies.map((reply: string) => this.sendAsync(`[Bot] ${reply}`)))
+  private async testUserKeywordsAsync(matched: RegExpMatchArray): Promise<void> {
+    if (this.shouldBeAccepted(matched))
+      await Promise.all(
+        this.getUserKeywordRepliesAsync(
+          (keyword: string) => matched.groups.msg.includes(keyword)
+        ).map(
+          async (reply: Promise<string>) => this.sendAsync(`[Bot] ${await reply}`)
+        )
+      )
   }
 
   private async translateAsync(match: RegExpMatchArray): Promise<void> {
@@ -403,8 +404,6 @@ export class Bot implements AsyncDisposable, BotInterface {
 }
 
 type Predicate<T> = (value: T) => boolean
-
-const bindToFilterIncludedByMessage = (matched: RegExpMatchArray) => matched.groups.msg.includes.bind(matched.groups.msg)
 
 const composeLog = (last: { host?: string, message?: string }, matched: RegExpMatchArray): string => {
   const current = {
