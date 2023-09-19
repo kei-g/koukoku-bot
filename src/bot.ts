@@ -10,6 +10,7 @@ import { readFile } from 'fs'
 
 export class Bot implements AsyncDisposable, BotInterface {
   private static readonly BackLogRE = />>\s+「\s+(バック)?ログ(\s+((?<command>--help)|(?<count>[1-9]\d*)))?\s+」/
+  private static readonly CalcRE = />>\s「\s計算\s(?<expr>[\d\s.+\-*/%()]+)」/
   private static readonly EscapesRE = /(\x07|\x1b\[\d+m|\xef\xbb\xbf)/g
   private static readonly HelpRE = />>\s+「\s+(?<command>コマンド(リスト)?|ヘルプ)\s+[^」]*」/
   private static readonly MessageRE = />>\s「\s(?<msg>[^」]+)\s」\(チャット放話\s-\s(?<date>\d{2}\/\d{2}\s\([^)]+\))\s(?<time>\d{2}:\d{2}:\d{2})\sby\s(?<host>[^\s]+)\s君\)\s<</g
@@ -70,6 +71,25 @@ export class Bot implements AsyncDisposable, BotInterface {
       this.recent.map.set(id, obj)
       this.recent.set.add(log)
       return obj
+    }
+  }
+
+  private async calculateAsync(matched: RegExpMatchArray): Promise<void> {
+    const expr = matched.groups.expr
+    process.stdout.write(`[calc] \x1b[32m'${expr}'\x1b[m\n`)
+    try {
+      validateParentheses(expr)
+      const keys = new Set(keyNamesOf(global))
+      keys.add('globalThis')
+      const args = [...keys]
+      args.push(`"use strict";return ${expr}`)
+      const f = new Function(...args)
+      const value = f()
+      process.stdout.write(`[calc] \x1b[33m${value}\x1b[m\n`)
+      await this.sendAsync(`[Bot] 計算結果は${value}です`)
+    }
+    catch (reason: unknown) {
+      await this.sendAsync(`[Bot] 計算エラー, ${reason instanceof Error ? reason.message : reason}`)
     }
   }
 
@@ -178,6 +198,7 @@ export class Bot implements AsyncDisposable, BotInterface {
   private async handleCanonicalCommandsAsync(text: string): Promise<boolean> {
     const patterns = [
       { e: Bot.BackLogRE, f: this.locateBacklogsAsync.bind(this) },
+      { e: Bot.CalcRE, f: this.calculateAsync.bind(this) },
       { e: Bot.HelpRE, f: this.describeGeneralHelp.bind(this) },
       { e: Bot.TranslateRE, f: this.translateOrDescribeAsync.bind(this) },
       { e: Bot.UserKeywordRE, f: this.handleUserKeywordCommandAsync.bind(this) },
@@ -364,7 +385,7 @@ export class Bot implements AsyncDisposable, BotInterface {
     }
   }
 
-  async [Symbol.asyncDispose](): Promise<void> {
+  async[Symbol.asyncDispose](): Promise<void> {
     console.log('disposing bot...')
     clearInterval(this.interval)
     console.log('disposing web...')
@@ -414,6 +435,13 @@ const filter = <T>(iterable: Iterable<T>, predicate: (value: T) => boolean) => f
 
 const isNotTimeSignal = (matched: RegExpMatchArray) => !matched.groups.msg.startsWith('[時報] ')
 
+const keyNamesOf = (obj: Record<string, unknown>) => {
+  const keys = [] as string[]
+  for (const key in obj)
+    keys.push(key)
+  return keys
+}
+
 const parseIntOr = (text: string, defaultValue: number, radix?: number) => {
   const c = parseInt(text, radix)
   return isNaN(c) ? defaultValue : c
@@ -422,3 +450,21 @@ const parseIntOr = (text: string, defaultValue: number, radix?: number) => {
 const selectIdOfSpeech = (speech: Speech) => speech.id
 
 const sleepAsync = (timeout: number) => new Promise<void>((resolve: () => void) => setTimeout(resolve, timeout))
+
+const validateParentheses = (expr: string): void => {
+  const value = [...expr].reduce((r: number, c: string) => (r += valueForParenthesis[c] ?? 0, r < 0 ? Number.NaN : r), 0)
+  const messages = [
+    `${value}個の閉じ括弧が不足しています`,
+    undefined,
+    '不正な閉じ括弧があります',
+  ]
+  const index = (+isNaN(value)) * 2 + +(value === 0)
+  const message = messages[index]
+  if (typeof message === 'string')
+    throw new Error(message)
+}
+
+const valueForParenthesis = {
+  '(': 1,
+  ')': -1,
+} as Record<string, number>
