@@ -33,6 +33,13 @@
 
 キーワード --help
 * キーワード機能に関するヘルプを表示する
+
+計算 式
+* 加減乗除,剰余,冪乗の式の計算結果を返す
+* 乗算記号は * (アスタリスク)
+* 除算記号は / (スラッシュ)
+* 剰余記号は % (パーセント)
+* 冪乗記号は ** (2つの連続するアスタリスク)
 ```
 
 </details>
@@ -175,15 +182,34 @@
 
 </details>
 
+### Calculation
+
+- 行頭の `計算 式` に反応して、指定された式を計算させることができます
+  - 加減乗除,剰余,冪乗に対応しています
+    - 加算記号は + (プラス)
+    - 減算記号は - (マイナス)
+    - 乗算記号は * (アスタリスク)
+    - 除算記号は / (スラッシュ)
+    - 剰余記号は % (パーセント)
+    - 冪乗記号は ** (2つの連続するアスタリスク)
+
+#### Example for calculation
+
+<details>
+<summary>計算の例</summary>
+
+```text
+計算 4+3*(-2)-1
+```
+
+</details>
+
 ## License
 
 The scripts and documentation in this project are released under the [BSD-3-Clause License][license-url]
 
 ## TODO
 
-- Calculation
-  - Interpret arithmetic expression.
-    - `計算 4+3` has to be answered as `[Bot] 4+3=7`
 - Logging
   - Accept speeches.
     - Pool short data and accumulate them.
