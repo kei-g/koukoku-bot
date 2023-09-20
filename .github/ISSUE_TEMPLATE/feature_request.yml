@@ -1,0 +1,84 @@
+assignees:
+  - kei-g
+body:
+  - attributes:
+      value: |
+        Thanks for taking the time to fill out this feature request!
+    type: markdown
+  - attributes:
+      description: How can we get in touch with you if we need more info?
+      label: Contact Details
+      placeholder: ex. email@example.com
+    id: contact
+    type: input
+    validations:
+      required: false
+  - attributes:
+      description: Start of development
+      label: "Start Date"
+      placeholder: "month/day/year"
+    id: start_date
+    type: input
+    validations:
+      required: false
+  - attributes:
+      description: Pull request used
+      label: "Implementation PR"
+      placeholder: "#Pull Request ID"
+    id: implementation_pr
+    type: textarea
+    validations:
+      required: false
+  - attributes:
+      description: Common issues
+      label: "Reference Issues"
+      placeholder: "#Issues IDs"
+    id: reference_issues
+    type: textarea
+    validations:
+      required: false
+  - attributes:
+      description: Provide a brief explanation of the feature
+      label: "Summary"
+      placeholder: Describe in a few lines your feature request
+    id: summary
+    type: textarea
+    validations:
+      required: true
+  - attributes:
+      description: Indicate here some basic examples of your feature.
+      label: "Basic Example"
+      placeholder: A few specific words about your feature request.
+    id: basic_example
+    type: textarea
+    validations:
+      required: true
+  - attributes:
+      description: What are the drawbacks/impacts of your feature request ?
+      label: "Drawbacks"
+      placeholder: Identify the drawbacks and impacts while being neutral on your feature request
+    id: drawbacks
+    type: textarea
+    validations:
+      required: true
+  - attributes:
+      description: What questions still remain unresolved ?
+      label: "Unresolved questions"
+      placeholder: Identify any unresolved issues.
+    id: unresolved_question
+    type: textarea
+    validations:
+      required: false
+  - attributes:
+      description: By submitting this issue, you agree to follow our [Code of Conduct](https://github.com/kei-g/koukoku-bot/blob/main/CODE_OF_CONDUCT.md)
+      label: Code of Conduct
+      options:
+        - label: I agree to follow this project's Code of Conduct
+          required: true
+    id: terms
+    type: checkboxes
+description: Create a new ticket for a new feature request
+name: "💡 Feature Request"
+labels:
+  - question
+title: "💡 [REQUEST] - <title>"
