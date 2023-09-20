@@ -10,7 +10,7 @@ import { readFile } from 'fs'
 
 export class Bot implements AsyncDisposable, BotInterface {
   private static readonly BackLogRE = /^(バック)?ログ(\s+((?<command>--help)|(?<count>[1-9]\d*)))?$/
-  private static readonly CalcRE = /^計算\s(?<expr>[\d\s.+\-*/%()]+)$/
+  private static readonly CalcRE = /^計算\s(?<expr>[acinost\d\s.+\-*/%()]+)$/
   private static readonly HelpRE = /^(?<command>コマンド(リスト)?|ヘルプ)$/
   private static readonly MessageRE = />>\s「\s(?<msg>[^」]+)\s」\(チャット放話\s-\s(?<date>\d\d\/\d\d\s\([^)]+\))\s(?<time>\d\d:\d\d:\d\d)\sby\s(?<host>[^\s]+)\s君(\s(?<self>〈＊あなた様＊〉))?\)\s<</g
   private static readonly TranslateRE = /^翻訳\s+((?<command>--(help|lang))|((?<lang>bg|cs|da|de|el|en|es|et|fi|fr|hu|id|it|ja|ko|lt|lv|nb|nl|pl|pt|ro|ru|sk|sl|sv|tr|uk|zh|bg|cs|da|de|el|en|es|et|fi|fr|hu|id|it|ja|ko|lt|lv|nb|nl|pl|pt|ro|ru|sk|sl|sv|tr|uk|zh)\s+)?(?<text>.+))$/i
@@ -81,9 +81,10 @@ export class Bot implements AsyncDisposable, BotInterface {
       const keys = new Set(keyNamesOf(global))
       keys.add('globalThis')
       const args = [...keys]
+      args.unshift('cos', 'sin', 'tan')
       args.push(`"use strict";return ${expr}`)
       const f = new Function(...args)
-      const value = f()
+      const value = f(Math.cos, Math.sin, Math.tan)
       process.stdout.write(`[calc] \x1b[33m${value}\x1b[m\n`)
       await this.sendAsync(`[Bot] 計算結果は${value}です`)
     }
@@ -453,20 +454,60 @@ const selectIdOfSpeech = (speech: Speech) => speech.id
 
 const sleepAsync = (timeout: number) => new Promise<void>((resolve: () => void) => setTimeout(resolve, timeout))
 
+type Parenthesis = {
+  opened: number
+  qualifier: string
+}
+
+const updateParenthesisContext = (ctx: Parenthesis, c: string) => {
+  const addendum = valueForParenthesis[c]
+  if (addendum === undefined)
+    ctx.qualifier += c
+  else {
+    validateQualifier(ctx)
+    ctx.opened += addendum
+    ctx.qualifier = ''
+  }
+  return ctx
+}
+
 const validateParentheses = (expr: string): void => {
-  const value = [...expr].reduce((r: number, c: string) => (r += valueForParenthesis[c] ?? 0, r < 0 ? Number.NaN : r), 0)
+  const parenthesis = [...expr].reduce(updateParenthesisContext, { opened: 0, qualifier: '' })
   const messages = [
-    `${value}個の閉じ括弧が不足しています`,
+    `${parenthesis.opened}個の閉じ括弧が不足しています`,
     undefined,
     '不正な閉じ括弧があります',
   ]
-  const index = (+isNaN(value)) * 2 + +(value === 0)
+  const index = (+isNaN(parenthesis.opened)) * 2 + +(parenthesis.opened === 0)
   const message = messages[index]
   if (typeof message === 'string')
     throw new Error(message)
 }
 
+const validateQualifier = (ctx: Parenthesis) => {
+  console.log(ctx)
+  if (ctx.qualifier.length && !['cos', 'sin', 'tan'].includes(ctx.qualifier.trim()))
+    throw new Error(`${ctx.qualifier}は関数ではありません`)
+}
+
 const valueForParenthesis = {
+  ' ': 0,
+  '%': 0,
   '(': 1,
   ')': -1,
+  '*': 0,
+  '+': 0,
+  '-': 0,
+  '.': 0,
+  '/': 0,
+  '0': 0,
+  '1': 0,
+  '2': 0,
+  '3': 0,
+  '4': 0,
+  '5': 0,
+  '6': 0,
+  '7': 0,
+  '8': 0,
+  '9': 0,
 } as Record<string, number>
