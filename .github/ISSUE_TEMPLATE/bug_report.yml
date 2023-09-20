@@ -1,0 +1,96 @@
+assignees:
+  - kei-g
+body:
+  - attributes:
+      value: |
+        Thanks for taking the time to fill out this bug report!
+    type: markdown
+  - attributes:
+      description: How can we get in touch with you if we need more info?
+      label: Contact Details
+      placeholder: ex. email@example.com
+    id: contact
+    type: input
+    validations:
+      required: false
+  - attributes:
+      label: "Description"
+      description: Please enter an explicit description of your issue
+      placeholder: Short and explicit description of your incident...
+    id: description
+    type: textarea
+    validations:
+      required: true
+  - attributes:
+      description: Please enter an explicit description of your issue
+      label: "Reproduction steps"
+      value: |
+        1. Go to '...'
+        2. Click on '....'
+        3. Scroll down to '....'
+        4. See error
+      render: bash
+    id: reprod
+    type: textarea
+    validations:
+      required: true
+  - attributes:
+      label: "Version"
+      description: What version of our software are you running?
+      options:
+        - 1.0.0
+    id: version
+    type: dropdown
+    validations:
+      required: true
+  - attributes:
+      label: What browsers are you seeing the problem on?
+      multiple: true
+      options:
+        - Chrome
+        - Firefox
+        - Microsoft Edge
+        - Safari
+    id: browsers
+    type: dropdown
+  - attributes:
+      description: What is the impacted environment?
+      label: "OS"
+      multiple: true
+      options:
+        - Windows
+        - Linux
+        - Mac
+    id: os
+    type: dropdown
+    validations:
+      required: false
+  - attributes:
+      description: If applicable, add screenshots to help explain your problem.
+      label: "Screenshots"
+      value: |
+        ![DESCRIPTION](LINK.png)
+      render: bash
+    id: screenshot
+    type: textarea
+    validations:
+      required: false
+  - attributes:
+      label: Relevant log output
+      description: Please copy and paste any relevant log output. This will be automatically formatted into code, so no need for backticks.
+      render: bash
+    id: logs
+    type: textarea
+  - attributes:
+      description: By submitting this issue, you agree to follow our [Code of Conduct](https://github.com/kei-g/koukoku-bot/blob/main/CODE_OF_CONDUCT.md)
+      label: Code of Conduct
+      options:
+        - label: I agree to follow this project's Code of Conduct
+          required: true
+    id: terms
+    type: checkboxes
+description: Create a new ticket for a bug.
+name: "🐛 Bug Report"
+labels:
+  - bug
+title: "🐛 [BUG] - <title>"
