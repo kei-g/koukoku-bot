@@ -3,6 +3,7 @@ import * as tls from 'tls'
 import { BackLog, BotInterface, DeepL, GitHub, IgnorePattern, KoukokuServer, Speech, Unicode, Web, compileIgnorePattern, isDeepLError, isDeepLSuccess, isGitHubResponse, selectBodyOfBackLog, shouldBeIgnored } from '.'
 import { KoukokuProxy } from './lib'
 import { RedisCommandArgument } from '@redis/client/dist/lib/commands'
+import { createContext, runInContext } from 'vm'
 import { createHash } from 'crypto'
 import { decode, encode } from 'iconv-lite'
 import { promisify } from 'util'
@@ -77,14 +78,18 @@ export class Bot implements AsyncDisposable, BotInterface {
     const expr = matched.groups.expr
     process.stdout.write(`[calc] \x1b[32m'${expr}'\x1b[m\n`)
     try {
-      validateParentheses(expr)
-      const keys = new Set(keyNamesOf(global))
-      keys.add('globalThis')
-      const args = [...keys]
-      args.unshift('cos', 'sin', 'tan')
-      args.push(`"use strict";return ${expr}`)
-      const f = new Function(...args)
-      const value = f(Math.cos, Math.sin, Math.tan)
+      const context = createContext(
+        {
+          E: Math.E,
+          PI: Math.PI,
+          cos: Math.cos,
+          log: Math.log,
+          sin: Math.sin,
+          tan: Math.tan,
+          'π': Math.PI,
+        }
+      )
+      const value = runInContext(expr, context)
       process.stdout.write(`[calc] \x1b[33m${value}\x1b[m\n`)
       await this.sendAsync(`[Bot] 計算結果は${value}です`)
     }
@@ -436,13 +441,6 @@ const filter = <T>(iterable: Iterable<T>, predicate: (value: T) => boolean) => f
 
 const isNotTimeSignal = (matched: RegExpMatchArray) => !matched.groups.msg.startsWith('[時報] ')
 
-const keyNamesOf = (obj: Record<string, unknown>) => {
-  const keys = [] as string[]
-  for (const key in obj)
-    keys.push(key)
-  return keys
-}
-
 const parseIntOr = (text: string, defaultValue: number, radix?: number) => {
   const c = parseInt(text, radix)
   return isNaN(c) ? defaultValue : c
@@ -453,61 +451,3 @@ const passThrough = <T>(value: T): T => value
 const selectIdOfSpeech = (speech: Speech) => speech.id
 
 const sleepAsync = (timeout: number) => new Promise<void>((resolve: () => void) => setTimeout(resolve, timeout))
-
-type Parenthesis = {
-  opened: number
-  qualifier: string
-}
-
-const updateParenthesisContext = (ctx: Parenthesis, c: string) => {
-  const addendum = valueForParenthesis[c]
-  if (addendum === undefined)
-    ctx.qualifier += c
-  else {
-    validateQualifier(ctx)
-    ctx.opened += addendum
-    ctx.qualifier = ''
-  }
-  return ctx
-}
-
-const validateParentheses = (expr: string): void => {
-  const parenthesis = [...expr].reduce(updateParenthesisContext, { opened: 0, qualifier: '' })
-  const messages = [
-    `${parenthesis.opened}個の閉じ括弧が不足しています`,
-    undefined,
-    '不正な閉じ括弧があります',
-  ]
-  const index = (+isNaN(parenthesis.opened)) * 2 + +(parenthesis.opened === 0)
-  const message = messages[index]
-  if (typeof message === 'string')
-    throw new Error(message)
-}
-
-const validateQualifier = (ctx: Parenthesis) => {
-  console.log(ctx)
-  if (ctx.qualifier.length && !['cos', 'sin', 'tan'].includes(ctx.qualifier.trim()))
-    throw new Error(`${ctx.qualifier}は関数ではありません`)
-}
-
-const valueForParenthesis = {
-  ' ': 0,
-  '%': 0,
-  '(': 1,
-  ')': -1,
-  '*': 0,
-  '+': 0,
-  '-': 0,
-  '.': 0,
-  '/': 0,
-  '0': 0,
-  '1': 0,
-  '2': 0,
-  '3': 0,
-  '4': 0,
-  '5': 0,
-  '6': 0,
-  '7': 0,
-  '8': 0,
-  '9': 0,
-} as Record<string, number>
