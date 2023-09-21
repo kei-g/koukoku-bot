@@ -6,7 +6,7 @@
   "dependencies": {
     "@redis/client": "^1.5.9",
     "iconv-lite": "^0.6.3",
-    "ws": "^8.14.1"
+    "ws": "^8.14.2"
   },
   "description": "Bot for telnets://koukoku.shadan.open.ad.jp",
   "devDependencies": {
