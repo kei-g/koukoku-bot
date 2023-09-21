@@ -1,4 +1,29 @@
 class Client {
+  #prependListItemNode(id, message) {
+    const li = document.createElement('li');
+    li.setAttribute('id', id);
+    const ctx = {};
+    for (const matched of message.matchAll(urlRE)) {
+      if (ctx.last !== matched.index) {
+        const value = message.slice(ctx.last ?? 0, matched.index);
+        const text = document.createTextNode(value);
+        li.appendChild(text);
+      }
+      const a = document.createElement('a');
+      a.setAttribute('href', matched[0]);
+      const text = document.createTextNode(matched[0]);
+      a.appendChild(text);
+      li.appendChild(a);
+      ctx.last = matched.index + matched[0].length;
+    }
+    if (ctx.last === undefined || ctx.last < message.length) {
+      const value = message.slice(ctx.last ?? 0);
+      const text = document.createTextNode(value);
+      li.appendChild(text);
+    }
+    this.messages.prepend(li);
+  }
+
   constructor(messages) {
     this.messages = messages
   }
@@ -9,10 +34,7 @@ class Client {
       li.textContent = data.message.log;
     else {
       const loading = document.querySelectorAll('ul#messages>li.now-loading');
-      li = document.createElement('li', { id: data.id });
-      const text = document.createTextNode(data.message.log);
-      li.appendChild(text);
-      this.messages.prepend(li);
+      this.#prependListItemNode(data.id, data.message.log);
       for (let i = 0; i < loading.length; i++)
         this.messages.removeChild(loading[i]);
     }
@@ -59,6 +81,8 @@ async function say() {
   button.removeAttribute('disabled');
   msg.value = '';
 }
+
+const urlRE = /https?:\/\/[\w!\?/\+\-_~=;\.,\*&@#\$%\(\)'\[\]]+/g;
 
 window.addEventListener('DOMContentLoaded', async () => {
   const msg = document.getElementById(id);
