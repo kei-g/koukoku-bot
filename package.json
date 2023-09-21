@@ -4,7 +4,7 @@
     "name": "kei-g"
   },
   "dependencies": {
-    "@redis/client": "^1.5.9",
+    "@redis/client": "^1.5.10",
     "iconv-lite": "^0.6.3",
     "ws": "^8.14.2"
   },
