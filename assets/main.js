@@ -10,8 +10,26 @@ class Client {
     else {
       const loading = document.querySelectorAll('ul#messages>li.now-loading');
       li = document.createElement('li', { id: data.id });
-      const text = document.createTextNode(data.message.log);
-      li.appendChild(text);
+      const { message } = data
+      const { log } = message
+      const re = /https?:\/\/[\w!\?/\+\-_~=;\.,\*&@#\$%\(\)'\[\]]+/g
+      const ctx = {}
+      for (const matched of log.matchAll(re)) {
+        if (ctx.last !== matched.index) {
+          const text = document.createTextNode(log.slice(ctx.last ?? 0, matched.index))
+          li.appendChild(text)
+        }
+        const a = document.createElement('a')
+        a.setAttribute('href', matched[0])
+        const text = document.createTextNode(matched[0])
+        a.appendChild(text)
+        li.appendChild(a)
+        ctx.last = matched.index + matched[0].length
+      }
+      if (ctx.last === undefined || ctx.last < log.length) {
+        const text = document.createTextNode(log.slice(ctx.last ?? 0))
+        li.appendChild(text)
+      }
       this.messages.prepend(li);
       for (let i = 0; i < loading.length; i++)
         this.messages.removeChild(loading[i]);
