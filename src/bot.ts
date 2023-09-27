@@ -1,6 +1,6 @@
 import * as redis from '@redis/client'
 import * as tls from 'tls'
-import { BotInterface, DeepL, GitHub, IgnorePattern, KoukokuProxy, KoukokuServer, Log, Speech, Unicode, Web, compileIgnorePattern, isDeepLError, isDeepLSuccess, isGitHubResponse, selectBodyOfLog, shouldBeIgnored } from '.'
+import { BotInterface, DeepL, GitHub, IgnorePattern, KoukokuProxy, KoukokuServer, Log, ProxyResponse, Speech, Unicode, Web, compileIgnorePattern, isDeepLError, isDeepLSuccess, isGitHubResponse, isProxyFailure, selectBodyOfLog, shouldBeIgnored } from '.'
 import { RedisCommandArgument } from '@redis/client/dist/lib/commands'
 import { createHash } from 'crypto'
 import { promisify } from 'util'
@@ -304,10 +304,24 @@ export class Bot implements AsyncDisposable, BotInterface {
     await this.sendAsync(text)
   }
 
-  private async sendAsync(text: string): Promise<void> {
+  private async sendAsync(text: string, retryCount: number = 3): Promise<Error | ProxyResponse | string> {
     process.stdout.write(text + '\n')
     this.client.write('ping\r\n')
-    await KoukokuProxy.sendAsync(text)
+    const ctx = {
+      i: 0,
+      result: await KoukokuProxy.sendAsync(text)
+    } as {
+      i: number
+      result: Error | ProxyResponse | string
+    }
+    for (; ctx.i < retryCount && isProxyFailure(ctx.result); ctx.i++)
+      ctx.result = await KoukokuProxy.sendAsync(text)
+    if (isProxyFailure(ctx.result)) {
+      process.stdout.write('The bot failed to retry, so send data to telnet server directly.\n')
+      this.client.write(text + '\r\n')
+      ctx.result = { result: undefined }
+    }
+    return ctx.result
   }
 
   private shouldBeAccepted(matched: RegExpMatchArray): boolean {
