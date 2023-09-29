@@ -138,7 +138,7 @@ export class Bot implements AsyncDisposable, BotInterface {
     list.push('')
     for (const e of keywords)
       list.push(e.join(' => '))
-    if (keywords.size < 40)
+    if (list.length <= 30)
       await this.createSpeechAsync(list.join('\n'))
     else {
       const speech = await this.createSpeechAsync(list.join('\n'), 7, false)
@@ -261,7 +261,7 @@ export class Bot implements AsyncDisposable, BotInterface {
         const text = composeLog(last, m)
         contents.push(text)
       }
-    await this.createSpeechAsync(contents.slice(0, Math.min(parseIntOr(count, 50), 50)).join('\n'))
+    await this.createSpeechAsync(contents.slice(0, Math.min(parseIntOr(count, 10), 30)).join('\n'))
   }
 
   async notifyWebClient(send: (data: Log[]) => Promise<void>): Promise<void> {
