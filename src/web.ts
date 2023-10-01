@@ -118,10 +118,12 @@ export class Web implements Disposable {
   }
 
   async loadAssetsAsync(): Promise<void> {
-    for (const name of await readdir('assets')) {
-      const data = await readFile(joinPath('assets', name)).catch(suppress)
-      data ? this.assets.set(name, data) : this.assets.delete(name)
-    }
+    for (const entry of await readdir('assets', { withFileTypes: true }))
+      if (entry.isFile()) {
+        const { name } = entry
+        const data = await readFile(joinPath('assets', name)).catch(suppress)
+        data ? this.assets.set(name, data) : this.assets.delete(name)
+      }
   }
 
   private async notifyWebClient(client: WebSocketClient): Promise<void> {
