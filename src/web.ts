@@ -1,10 +1,9 @@
 import WebSocket from 'ws'
-import { BotInterface, Log, Speech, replaceVariables } from '.'
+import { BotInterface, Log, Speech, replaceVariables, suppress } from '.'
 import { IncomingMessage, Server, ServerResponse, createServer } from 'http'
 import { WebSocket as WebSocketClient, WebSocketServer } from 'ws'
 import { join as joinPath } from 'path'
-import { promisify } from 'util'
-import { readFile, readdir } from 'fs'
+import { readFile, readdir } from 'fs/promises'
 
 type AsyncFunction = () => Promise<void>
 
@@ -119,9 +118,9 @@ export class Web implements Disposable {
   }
 
   async loadAssetsAsync(): Promise<void> {
-    for (const name of await promisify(readdir)('assets')) {
-      const data = await promisify(readFile)(joinPath('assets', name))
-      this.assets.set(name, data)
+    for (const name of await readdir('assets')) {
+      const data = await readFile(joinPath('assets', name)).catch(suppress)
+      data ? this.assets.set(name, data) : this.assets.delete(name)
     }
   }
 
@@ -155,12 +154,16 @@ export class Web implements Disposable {
       webmanifest: 'application/manifest+json',
     } as Record<string, string>
     const path = joinPath('assets', name)
-    const originalData = await promisify(readFile)(path)
-    const data = (['css', 'html', 'js', 'webmanifest'].includes(ext)) ? replaceVariables(originalData) : originalData
-    response.statusCode = 200
-    response.setHeader('Content-Length', data.byteLength)
-    response.setHeader('Content-Type', types[name.split('.').at(-1)])
-    response.write(data)
+    const originalData = await readFile(path).catch(suppress)
+    if (originalData) {
+      const data = (['css', 'html', 'js', 'webmanifest'].includes(ext)) ? replaceVariables(originalData) : originalData
+      response.statusCode = 200
+      response.setHeader('Content-Length', data.byteLength)
+      response.setHeader('Content-Type', types[name.split('.').at(-1)])
+      response.write(data)
+    }
+    else
+      response.statusCode = 404
   }
 
   private respondHealthAsync(_request: IncomingMessage, response: ServerResponse): Promise<void> {

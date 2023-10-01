@@ -1,11 +1,12 @@
 import * as redis from '@redis/client'
 import * as tls from 'tls'
-import { BotInterface, DeepL, GitHub, IgnorePattern, KoukokuProxy, KoukokuServer, Log, Speech, Unicode, Web, compileIgnorePattern, isDeepLError, isDeepLSuccess, isGitHubResponse, selectBodyOfLog, shouldBeIgnored } from '.'
+import { BotInterface, DeepL, GitHub, IgnorePattern, KoukokuProxy, KoukokuServer, Log, Speech, Unicode, Web, compileIgnorePattern, isDeepLError, isDeepLSuccess, isGitHubResponse, selectBodyOfLog, shouldBeIgnored, suppress } from '.'
 import { EventEmitter } from 'stream'
 import { RedisCommandArgument } from '@redis/client/dist/lib/commands'
 import { createHash } from 'crypto'
-import { promisify } from 'util'
-import { readFile } from 'fs'
+import { readFile } from 'fs/promises'
+
+type Action<T> = (value: T) => void
 
 export class Bot implements AsyncDisposable, BotInterface {
   private static readonly CalcRE = /^計算\s(?<expr>[πEIPaceginopstx\d\s.+\-*/%()]+)$/
@@ -122,10 +123,12 @@ export class Bot implements AsyncDisposable, BotInterface {
   }
 
   private async createSpeechFromFileAsync(path: string): Promise<void> {
-    const data = await promisify(readFile)(path)
-    const text = data.toString().trim()
-    const time = Date.now().toString(16).slice(2, -2)
-    await this.createSpeechAsync(`[Bot@${time}] https://github.com/kei-g/koukoku-bot\n\n${text}`)
+    const data = await readFile(path).catch(suppress)
+    if (data) {
+      const text = data.toString().trim()
+      const time = Date.now().toString(16).slice(2, -2)
+      await this.createSpeechAsync(`[Bot@${time}] https://github.com/kei-g/koukoku-bot\n\n${text}`)
+    }
   }
 
   private async createUserKeywordsSpeechAsync(command: string, keywords: Map<string, string>): Promise<void> {
@@ -240,13 +243,13 @@ export class Bot implements AsyncDisposable, BotInterface {
   }
 
   private async loadIgnorePatternsAsync(): Promise<void> {
-    const data = await promisify(readFile)('conf/ignore.json')
-    const text = data.toString()
-    const config = JSON.parse(text) as { ignorePatterns: IgnorePattern[] }
-    if ('ignorePatterns' in config) {
-      const patterns = config.ignorePatterns.map(compileIgnorePattern).filter((pattern: IgnorePattern | undefined) => pattern !== undefined)
+    const data = await readFile('conf/ignore.json').catch(suppress)
+    if (data) {
+      const text = data.toString()
+      const config = JSON.parse(text) as { ignorePatterns: IgnorePattern[] }
+      const patterns = config.ignorePatterns?.map(compileIgnorePattern)?.filter((pattern: IgnorePattern | undefined) => pattern !== undefined)
       this.ignorePatterns.splice(0)
-      this.ignorePatterns.push(...patterns)
+      patterns?.forEach((this.ignorePatterns.push as Action<IgnorePattern>).bind(this.ignorePatterns))
     }
   }
 
@@ -324,7 +327,7 @@ export class Bot implements AsyncDisposable, BotInterface {
   }
 
   async startAsync(): Promise<void> {
-    await Promise.all(
+    await Promise.allSettled(
       [
         this.db.connect(),
         this.queryUserKeywordsAsync(),
