@@ -1,5 +1,6 @@
 **/*.js
 **/assets/*.ico
 **/assets/*.png
+**/conf/sjis.json
 **/dist/
 **/node_modules/

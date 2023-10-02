@@ -1,6 +1,6 @@
 import * as redis from '@redis/client'
 import * as tls from 'tls'
-import { BotInterface, DeepL, GitHub, IgnorePattern, KoukokuProxy, KoukokuServer, Log, Speech, Unicode, Web, compileIgnorePattern, isDeepLError, isDeepLSuccess, isGitHubResponse, selectBodyOfLog, shouldBeIgnored, suppress } from '.'
+import { BotInterface, DeepL, GitHub, IgnorePattern, KoukokuProxy, KoukokuServer, Log, SJIS, Speech, Web, compileIgnorePattern, isDeepLError, isDeepLSuccess, isGitHubResponse, selectBodyOfLog, shouldBeIgnored, suppress } from '.'
 import { EventEmitter } from 'stream'
 import { RedisCommandArgument } from '@redis/client/dist/lib/commands'
 import { createHash } from 'crypto'
@@ -363,7 +363,7 @@ export class Bot implements AsyncDisposable, BotInterface {
     else if (isDeepLSuccess(r))
       for (const t of r.translations) {
         const name = this.lang.getName(t.detected_source_language)
-        const escaped = Unicode.escape(t.text.replaceAll(/\r?\n/g, '').trim())
+        const escaped = await SJIS.escape(t.text.replaceAll(/\r?\n/g, '').trim())
         await this.sendAsync(`[${name}から${to}翻訳] ${escaped}`)
       }
   }
