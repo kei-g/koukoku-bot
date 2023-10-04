@@ -13,6 +13,7 @@ export class Bot implements AsyncDisposable, BotInterface {
   private static readonly HelpRE = /^(?<command>コマンド(リスト)?|ヘルプ)$/
   private static readonly LogRE = /^(バック)?ログ(\s+((?<command>--help)|(?<count>[1-9]\d*)))?$/
   private static readonly MessageRE = />>\s「\s(?<msg>[^」]+)\s」\(チャット放話\s-\s(?<date>\d\d\/\d\d\s\([^)]+\))\s(?<time>\d\d:\d\d:\d\d)\sby\s(?<host>[^\s]+)\s君(\s(?<self>〈＊あなた様＊〉))?\)\s<</g
+  private static readonly TallyRE = /^集計(\s(?<command>--help))?$/
   private static readonly TranslateRE = /^翻訳\s+((?<command>--(help|lang))|((?<lang>bg|cs|da|de|el|en|es|et|fi|fr|hu|id|it|ja|ko|lt|lv|nb|nl|pl|pt|ro|ru|sk|sl|sv|tr|uk|zh|bg|cs|da|de|el|en|es|et|fi|fr|hu|id|it|ja|ko|lt|lv|nb|nl|pl|pt|ro|ru|sk|sl|sv|tr|uk|zh)\s+)?(?<text>.+))$/i
   private static readonly UserKeywordRE = /^キーワード(?<command>一覧|登録|解除)?(\s(?<name>(--help|[\p{scx=Hiragana}\p{scx=Katakana}\p{scx=Han}\w]{1,8})))?(\s(?<value>[\p{scx=Common}\p{scx=Hiragana}\p{scx=Katakana}\p{scx=Han}\s\w\x21-\x2f\x3a-\x40\x5b-\x60\x7b-\x7e]+))?$/u
 
@@ -159,6 +160,10 @@ export class Bot implements AsyncDisposable, BotInterface {
     return this.createSpeechFromFileAsync('templates/help.txt')
   }
 
+  private async describeTallyHelp(_match: RegExpMatchArray): Promise<void> {
+    await this.createSpeechFromFileAsync('templates/tally/help.txt')
+  }
+
   private async describeTranslation(match: RegExpMatchArray): Promise<void> {
     const name = match.groups.command.slice(2).toLowerCase()
     await this.createSpeechFromFileAsync(`templates/translation/${name}.txt`)
@@ -186,6 +191,7 @@ export class Bot implements AsyncDisposable, BotInterface {
       { e: Bot.CalcRE, f: this.calculateAsync.bind(this) },
       { e: Bot.HelpRE, f: this.describeGeneralHelp.bind(this) },
       { e: Bot.LogRE, f: this.locateLogsAsync.bind(this) },
+      { e: Bot.TallyRE, f: this.handleTallyCommandAsync.bind(this) },
       { e: Bot.TranslateRE, f: this.translateOrDescribeAsync.bind(this) },
       { e: Bot.UserKeywordRE, f: this.handleUserKeywordCommandAsync.bind(this) },
     ]
@@ -197,6 +203,10 @@ export class Bot implements AsyncDisposable, BotInterface {
       placeholder.matched = !!matched
     }
     return placeholder.matched
+  }
+
+  private async handleTallyCommandAsync(matched: RegExpMatchArray): Promise<void> {
+    await (matched.groups.command === '--help' ? this.describeTallyHelp : this.tallyAsync).bind(this)(matched)
   }
 
   private async handleUserKeywordCommandAsync(match: RegExpMatchArray): Promise<void> {
@@ -290,10 +300,8 @@ export class Bot implements AsyncDisposable, BotInterface {
       this.pending.push(data)
   }
 
-  private async queryLogAsync(start: RedisCommandArgument, end: RedisCommandArgument, options?: { COUNT?: number }): Promise<void> {
-    if (50 < options?.COUNT)
-      options.COUNT = 50
-    const list = (await this.db.xRevRange(Bot.LogKey, start, end, options)).reverse() as unknown as Log[]
+  private async queryLogAsync(start: RedisCommandArgument, end: RedisCommandArgument): Promise<void> {
+    const list = (await this.db.xRevRange(Bot.LogKey, start, end)).reverse() as unknown as Log[]
     list.forEach(this.updateRecent.bind(this))
     this.recent.list.sort((lhs: Log, rhs: Log) => [-1, 1][+(lhs.id < rhs.id)])
   }
@@ -331,7 +339,7 @@ export class Bot implements AsyncDisposable, BotInterface {
       [
         this.db.connect(),
         this.queryUserKeywordsAsync(),
-        this.queryLogAsync('+', '-', { COUNT: 100 }),
+        this.queryLogAsync('+', '-'),
         this.loadIgnorePatternsAsync(),
         this.web.loadAssetsAsync(),
       ]
@@ -340,6 +348,41 @@ export class Bot implements AsyncDisposable, BotInterface {
     const store = this.acceptKoukoku.bind(this)
     this.pending.splice(0).forEach(store)
     this.client.on('data', store)
+  }
+
+  private tally(_matched: RegExpMatchArray): string[] {
+    const weekly = new Map<number, Map<string, RegExpMatchArray[]>>()
+    this.tallyWeekly(weekly)
+    const weeks = [...weekly.keys()].sort(descending)
+    const list = [] as string[]
+    for (const x of [{ name: '今', week: weeks[0] }, { name: '先', week: weeks[1] }]) {
+      const hosts = weekly.get(x.week)
+      list.push(`[Bot] ${x.name}週の逆引きホスト名で区別可能なクライアントの数は ${hosts.size} で、発言回数の多かったものは次の通りです`)
+      list.push(...[...hosts].sort(descendingByFrequency).map(e => `[Bot] ${e[0].replaceAll(/(\*+[-.]?)+/g, '')} ${e[1].length} 回`).slice(0, 5))
+    }
+    return list
+  }
+
+  private async tallyAsync(matched: RegExpMatchArray): Promise<void> {
+    for (const s of insertItemBetweenEachElement(this.tally(matched), undefined))
+      await (s === undefined ? sleepAsync(1000) : this.sendAsync(s))
+  }
+
+  private tallyWeekly(weekly: Map<number, Map<string, RegExpMatchArray[]>>): void {
+    const now = new Date()
+    const epoch = new Date(now.getFullYear(), 0, 1).getTime()
+    for (const item of this.recent.list)
+      for (const m of item.message.log.matchAll(Bot.MessageRE)) {
+        const timestamp = new Date(parseInt(item.id.split('-')[0])).getTime()
+        const numberOfDays = Math.floor((timestamp - epoch) / (24 * 60 * 60 * 1000))
+        const week = Math.ceil((now.getDay() + 1 + numberOfDays) / 7)
+        const hosts = weekly.get(week) ?? new Map<string, RegExpMatchArray[]>()
+        const { host } = m.groups
+        const list = hosts.get(host) ?? []
+        list.push(m)
+        hosts.set(host, list)
+        weekly.set(week, hosts)
+      }
   }
 
   private async testUserKeywordsAsync(matched: RegExpMatchArray): Promise<void> {
@@ -436,6 +479,10 @@ const createMap = (obj: { [key: string]: string }) => {
   }
   return map
 }
+
+const descending = (lhs: number, rhs: number) => rhs - lhs
+
+const descendingByFrequency = (lhs: [string, RegExpMatchArray[]], rhs: [string, RegExpMatchArray[]]) => rhs[1].length - lhs[1].length
 
 const filter = <T>(iterable: Iterable<T>, predicate: (value: T) => boolean) => function* () {
   for (const value of iterable)
