@@ -247,6 +247,7 @@ The scripts and documentation in this project are released under the [BSD-3-Clau
 - Logging
   - Accept speeches.
     - Pool short data and accumulate them.
+  - Separate the logging function from the main part of the bot into another process to avoid incomplete loggings during the service restarts.
 
 ## Contributions
 
