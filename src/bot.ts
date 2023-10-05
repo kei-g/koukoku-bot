@@ -270,7 +270,7 @@ export class Bot implements AsyncDisposable, BotInterface {
     const contents = [] as string[]
     const last = {} as { host?: string, message?: string }
     for (const line of this.recent.list.map(selectBodyOfLog))
-      for (const m of filter(line.matchAll(Bot.MessageRE), isNotTimeSignal)) {
+      for (const m of filter(filter(line.matchAll(Bot.MessageRE), isNotBot), isNotTimeSignal)) {
         const text = composeLog(last, m)
         contents.push(text)
       }
@@ -484,13 +484,15 @@ const descending = (lhs: number, rhs: number) => rhs - lhs
 
 const descendingByFrequency = (lhs: [string, RegExpMatchArray[]], rhs: [string, RegExpMatchArray[]]) => rhs[1].length - lhs[1].length
 
-const filter = <T>(iterable: Iterable<T>, predicate: (value: T) => boolean) => function* () {
+const filter = <T>(iterable: Iterable<T>, predicate: Predicate<T>) => function* () {
   for (const value of iterable)
     if (predicate(value))
       yield value
 }()
 
 const insertItemBetweenEachElement = <U, V>(source: Iterable<U>, item: V): (U | V)[] => [...source].reduce((result: (U | V)[], current: U) => (result.push(item, current), result), []).slice(1)
+
+const isNotBot = (matched: RegExpMatchArray) => !matched.groups.msg.startsWith('[Bot] ')
 
 const isNotTimeSignal = (matched: RegExpMatchArray) => !matched.groups.msg.startsWith('[時報] ')
 
