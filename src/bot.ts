@@ -147,7 +147,7 @@ export class Bot implements AsyncDisposable, BotInterface {
     else {
       const speech = await this.createSpeechAsync(list.join('\n'), 7, false)
       const expiresAt = (speech.expiresAt as Date).toLocaleString()
-      await this.sendAsync(`[Bot]キーワード${command}を${speech.url}に置きました,期限${expiresAt}`)
+      await this.sendAsync(`[Bot] キーワード${command}を${speech.url}に置きました,期限${expiresAt}`)
     }
   }
 
@@ -230,7 +230,7 @@ export class Bot implements AsyncDisposable, BotInterface {
   private async listUserKeywordsAsync(match: RegExpMatchArray): Promise<void> {
     const { command, name, value } = match.groups
     if (name || value)
-      await this.sendAsync(`[Bot]キーワード${command}の構文が正しくありません`)
+      await this.sendAsync(`[Bot] キーワード${command}の構文が正しくありません`)
     else {
       const keywords = createMap(await this.db.hGetAll(Bot.UserKeywordKey))
       if (keywords.size === 0)
@@ -314,7 +314,7 @@ export class Bot implements AsyncDisposable, BotInterface {
 
   private async registerUserKeywordAsync(match: RegExpMatchArray): Promise<void> {
     const { command, name, value } = match.groups
-    const text = '[Bot]キーワード' + ((name && value) ? (` "${name}" ` + ['は既に登録されています', 'を登録しました'][+(await this.db.hSetNX(Bot.UserKeywordKey, name, value))]) : `${command}の構文が正しくありません`)
+    const text = '[Bot] キーワード' + ((name && value) ? (` "${name}" ` + ['は既に登録されています', 'を登録しました'][+(await this.db.hSetNX(Bot.UserKeywordKey, name, value))]) : `${command}の構文が正しくありません`)
     if (text.endsWith('を登録しました'))
       this.userKeywords.add(name)
     await this.sendAsync(text)
@@ -407,7 +407,7 @@ export class Bot implements AsyncDisposable, BotInterface {
       for (const t of r.translations) {
         const name = this.lang.getName(t.detected_source_language)
         const escaped = await SJIS.escape(t.text.replaceAll(/\r?\n/g, '').trim())
-        await this.sendAsync(`[${name}から${to}翻訳] ${escaped}`)
+        await this.sendAsync(`[Bot] (${name}から${to}翻訳) ${escaped}`)
       }
   }
 
@@ -417,7 +417,7 @@ export class Bot implements AsyncDisposable, BotInterface {
 
   private async unregisterUserKeywordAsync(match: RegExpMatchArray): Promise<void> {
     const { command, name, value } = match.groups
-    const text = '[Bot]キーワード' + ((name && !value) ? (` "${name}" ` + ['は未登録です', 'を登録解除しました'][+(await this.db.hDel(Bot.UserKeywordKey, name))]) : `${command}の構文が正しくありません`)
+    const text = '[Bot] キーワード' + ((name && !value) ? (` "${name}" ` + ['は未登録です', 'を登録解除しました'][+(await this.db.hDel(Bot.UserKeywordKey, name))]) : `${command}の構文が正しくありません`)
     if (text.endsWith('を登録解除しました'))
       this.userKeywords.delete(name)
     await this.sendAsync(text)
