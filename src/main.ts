@@ -12,6 +12,7 @@ const main = async () => {
     delete server.port
   server.name = process.argv.at(2)
   server.rejectUnauthorized = !process.argv.includes('--no-reject-unauthorized')
+  process.stdout.write(`process is running on pid:\x1b[33m${process.pid}\x1b[m with ${JSON.stringify(server)}\n\n`)
   await using bot = new Bot(server)
   await bot.startAsync()
   await waitForSignalAsync('SIGINT')
