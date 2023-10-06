@@ -1,5 +1,5 @@
 import WebSocket from 'ws'
-import { BotInterface, Log, Speech, replaceVariables, suppress } from '.'
+import { Action, BotInterface, Log, Speech, replaceVariables, suppress } from '.'
 import { IncomingMessage, Server, ServerResponse, createServer } from 'http'
 import { WebSocket as WebSocketClient, WebSocketServer } from 'ws'
 import { join as joinPath } from 'path'
@@ -7,7 +7,7 @@ import { readFile, readdir } from 'fs/promises'
 
 type AsyncFunction = () => Promise<void>
 
-export class Web implements Disposable {
+export class Web implements AsyncDisposable {
   private readonly assets = new Map<string, Buffer>()
   private readonly messages = new Array<string>()
   private readonly pending = new WeakMap<WebSocketClient, Log[]>()
@@ -60,15 +60,17 @@ export class Web implements Disposable {
     this.messages.push('upgrade: ' + req.method + ' for ' + req.url)
   }
 
-  broadcast(value: Log): void {
+  async broadcastAsync(value: Log): Promise<void> {
     if (value) {
       const json = JSON.stringify(value)
       const data = Buffer.from(json)
+      const jobs = [] as Promise<Error | undefined>[]
       for (const client of this.webClients)
         if (client.readyState === WebSocketClient.OPEN)
-          client.send(data)
+          jobs.push(new Promise((resolve: Action<Error | undefined>) => client.send(data, resolve)))
         else
           this.enqueuePending(client, value)
+      await Promise.all(jobs)
     }
   }
 
@@ -152,11 +154,15 @@ export class Web implements Disposable {
   }
 
   private async notifyWebClient(client: WebSocketClient): Promise<void> {
-    await this.bot.notifyWebClient(async (data: Log[]) => {
-      const json = JSON.stringify(data)
-      const buffer = Buffer.from(json)
-      client.readyState === WebSocketClient.OPEN ? client.send(buffer) : this.enqueuePending(client, ...data)
-    })
+    await this.bot.notifyWebClient(
+      async (data: Log[]) => {
+        const json = JSON.stringify(data)
+        const buffer = Buffer.from(json)
+        client.readyState === WebSocketClient.OPEN
+          ? await new Promise((resolve: Action<Error | undefined>) => client.send(buffer, resolve))
+          : this.enqueuePending(client, ...data)
+      }
+    )
   }
 
   get port(): number | undefined {
@@ -215,10 +221,11 @@ export class Web implements Disposable {
       response.write(resource)
   }
 
-  [Symbol.dispose](): void {
-    this.server.close()
+  async[Symbol.asyncDispose](): Promise<void> {
+    const job1 = new Promise((resolve: Action<Error | undefined>) => this.server.close(resolve))
     this.webClients.forEach((client: WebSocketClient) => client.close())
     this.webClients.clear()
-    this.webSocket.close()
+    const job2 = new Promise((resolve: Action<Error | undefined>) => this.webSocket.close(resolve))
+    await Promise.all([job1, job2])
   }
 }

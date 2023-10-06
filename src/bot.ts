@@ -1,12 +1,10 @@
 import * as redis from '@redis/client'
 import * as tls from 'tls'
-import { BotInterface, DeepL, GitHub, IgnorePattern, KoukokuProxy, KoukokuServer, Log, SJIS, Speech, Web, compileIgnorePattern, isDeepLError, isDeepLSuccess, isGitHubResponse, selectBodyOfLog, shouldBeIgnored, suppress } from '.'
+import { Action, BotInterface, DeepL, GitHub, IgnorePattern, KoukokuProxy, KoukokuServer, Log, SJIS, Speech, Web, compileIgnorePattern, isDeepLError, isDeepLSuccess, isGitHubResponse, selectBodyOfLog, shouldBeIgnored, suppress } from '.'
 import { EventEmitter } from 'stream'
 import { RedisCommandArgument } from '@redis/client/dist/lib/commands'
 import { createHash } from 'crypto'
 import { readFile } from 'fs/promises'
-
-type Action<T> = (value: T) => void
 
 export class Bot implements AsyncDisposable, BotInterface {
   private static readonly CalcRE = /^計算\s(?<expr>[πEIPaceginopstx\d\s.+\-*/%()]+)$/
@@ -56,11 +54,12 @@ export class Bot implements AsyncDisposable, BotInterface {
       for (const matched of data.toString().replaceAll(/\r?\n/g, '').matchAll(Bot.MessageRE)) {
         console.log(matched)
         const log = await this.appendLogAsync(matched[0])
-        this.web.broadcast(log)
+        const job = this.web.broadcastAsync(log)
         const { groups } = matched
         const g = groups
         if (!g.self && !(await this.handleCanonicalCommandsAsync(g.msg)))
           await this.testUserKeywordsAsync(matched)
+        await job
       }
   }
 
@@ -439,13 +438,16 @@ export class Bot implements AsyncDisposable, BotInterface {
     console.log('disposing bot...')
     clearInterval(this.interval)
     console.log('disposing web...')
-    this.web[Symbol.dispose]()
+    const jobs = [] as Promise<number | void>[]
+    jobs.push(this.web[Symbol.asyncDispose]())
     console.log('deleting gists...')
-    await Promise.all([...this.speechesSet].map(selectIdOfSpeech).map(GitHub.deleteGistAsync))
+    for (const speech of this.speechesSet)
+      jobs.push(GitHub.deleteGistAsync(speech.id))
     console.log('disconnecting from database...')
-    await this.db.disconnect()
+    jobs.push(this.db.disconnect())
     console.log('disconnecting from telnet server...')
     this.client.end()
+    await Promise.all(jobs)
     console.log('done')
   }
 }
@@ -501,8 +503,6 @@ const parseIntOr = (text: string, defaultValue: number, radix?: number) => {
   const c = parseInt(text, radix)
   return isNaN(c) ? defaultValue : c
 }
-
-const selectIdOfSpeech = (speech: Speech) => speech.id
 
 const sleepAsync = (timeout: number) => new Promise<void>((resolve: () => void) => setTimeout(resolve, timeout))
 
