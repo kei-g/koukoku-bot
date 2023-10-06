@@ -25,14 +25,39 @@ export class Web implements Disposable {
 
   private acceptWebSocket(client: WebSocketClient): void {
     this.messages.push('connected from ' + client.url)
-    client.on('error', (error: Error) => this.messages.push('error: ' + error.message))
-    client.on('close', (code: number, reason: Buffer) => (this.messages.push('closed: ' + code.toString(16) + ', reason: 「' + reason.toString() + '」'), this.webClients.delete(client)))
-    client.on('message', (data: WebSocket.RawData, isBinary: boolean) => this.messages.push('data: ' + isBinary ? `${data.slice(0)}` : data.toString()))
-    client.on('open', () => this.messages.push('open'))
-    client.on('ping', (data: Buffer) => this.messages.push('ping: ' + data.toString()))
-    client.on('upgrade', (req: IncomingMessage) => this.messages.push('upgrade: ' + req.method + ' for ' + req.url))
+    client.on('error', this.acceptWebSocketError.bind(this))
+    client.on('close', this.acceptWebSocketClose.bind(this, client))
+    client.on('message', this.acceptWebSocketMessage.bind(this))
+    client.on('open', this.acceptWebSocketOpen.bind(this))
+    client.on('ping', this.acceptWebSocketPing.bind(this))
+    client.on('upgrade', this.acceptWebSocketUpgrade.bind(this))
     this.webClients.add(client)
     queueMicrotask(this.notifyWebClient.bind(this, client))
+  }
+
+  private acceptWebSocketClose(client: WebSocketClient, code: number, reason: Buffer): void {
+    this.messages.push('closed: ' + code.toString(16) + ', reason: 「' + reason.toString() + '」')
+    this.webClients.delete(client)
+  }
+
+  private acceptWebSocketError(error: Error): void {
+    this.messages.push('error: ' + error.message)
+  }
+
+  private acceptWebSocketMessage(data: WebSocket.RawData, isBinary: boolean): void {
+    this.messages.push('data: ' + isBinary ? `${data.slice(0)}` : data.toString())
+  }
+
+  private acceptWebSocketOpen(): void {
+    this.messages.push('open')
+  }
+
+  private acceptWebSocketPing(data: Buffer): void {
+    this.messages.push('ping: ' + data.toString())
+  }
+
+  private acceptWebSocketUpgrade(req: IncomingMessage): void {
+    this.messages.push('upgrade: ' + req.method + ' for ' + req.url)
   }
 
   broadcast(value: Log): void {
