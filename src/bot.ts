@@ -1,6 +1,6 @@
 import * as redis from '@redis/client'
 import * as tls from 'tls'
-import { BotInterface, DeepL, GitHub, IgnorePattern, KoukokuProxy, KoukokuServer, Log, SJIS, Speech, Web, compileIgnorePattern, isDeepLError, isDeepLSuccess, isGitHubResponse, selectBodyOfLog, shouldBeIgnored, suppress } from '.'
+import { BotInterface, DeepL, GitHub, IgnorePattern, KoukokuProxy, KoukokuServer, Log, NextHour, SJIS, Speech, Web, compileIgnorePattern, isDeepLError, isDeepLSuccess, isGitHubResponse, selectBodyOfLog, shouldBeIgnored, suppress } from '.'
 import { EventEmitter } from 'stream'
 import { RedisCommandArgument } from '@redis/client/dist/lib/commands'
 import { createHash } from 'crypto'
@@ -31,6 +31,7 @@ export class Bot implements AsyncDisposable, BotInterface {
   private readonly ignorePatterns = [] as IgnorePattern[]
   private readonly interval: NodeJS.Timeout
   private readonly lang = new DeepL.LanguageMap()
+  private readonly nextHour = new NextHour()
   private readonly pending = [] as Buffer[]
   private readonly recent = { list: [] as Log[], map: new Map<string, Log>(), set: new Set<string>() }
   private readonly speechesSet = new Set<Speech>()
@@ -48,6 +49,7 @@ export class Bot implements AsyncDisposable, BotInterface {
     this.client.setNoDelay(false)
     this.interval = setInterval(KoukokuProxy.pingAsync, parseIntOr(process.env.PROXY_PING_INTERVAL, 120000))
     this.db = redis.createClient({ pingInterval: 15000, url: process.env.REDIS_URL })
+    this.nextHour.on('timeout', this.announceTimeSignalAsync.bind(this))
     this.web = new Web(this)
   }
 
@@ -62,6 +64,20 @@ export class Bot implements AsyncDisposable, BotInterface {
         if (!g.self && !(await this.handleCanonicalCommandsAsync(g.msg)))
           await this.testUserKeywordsAsync(matched)
       }
+  }
+
+  private async announceTimeSignalAsync(): Promise<void> {
+    const now = new Date()
+    const [month, date, hour, minute, second] = [
+      now.getMonth() + 1,
+      now.getDate(),
+      now.getHours(),
+      now.getMinutes(),
+      now.getSeconds(),
+    ].map((value: number) => ('0' + value.toString()).slice(-2))
+    await this.sendAsync(`[時報] ${now.getFullYear()} 年 ${month} 月 ${date} 日 ${hour} 時 ${minute} 分 ${second} 秒です (代理)`)
+    await sleepAsync(1000)
+    this.nextHour.start()
   }
 
   private async appendLogAsync(text: string): Promise<Log> {
@@ -96,6 +112,7 @@ export class Bot implements AsyncDisposable, BotInterface {
 
   private connected(): void {
     this.client.write('nobody\r\n')
+    this.nextHour.start()
   }
 
   async createSpeechAsync(text: string, maxLength: number = 64, remark: boolean = true): Promise<Speech> {
@@ -437,6 +454,7 @@ export class Bot implements AsyncDisposable, BotInterface {
 
   async[Symbol.asyncDispose](): Promise<void> {
     console.log('disposing bot...')
+    this.nextHour.stop()
     clearInterval(this.interval)
     console.log('disposing web...')
     this.web[Symbol.dispose]()
