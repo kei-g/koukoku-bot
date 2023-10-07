@@ -363,8 +363,15 @@ export class Bot implements AsyncDisposable, BotInterface {
   }
 
   private async tallyAsync(matched: RegExpMatchArray): Promise<void> {
-    for (const s of insertItemBetweenEachElement(this.tally(matched), undefined))
-      await (s === undefined ? sleepAsync(1000) : this.sendAsync(s))
+    const now = new Date()
+    const list = [] as string[]
+    const date = now.toLocaleDateString('ja-JP-u-ca-japanese', { year: 'numeric', month: 'long', day: 'numeric' })
+    const time = now.toLocaleTimeString().split(':')
+    time.push('時', time.splice(1).join('分'), '秒')
+    list.push(`[Bot] ${date}${time.join('')}時点の集計結果`)
+    list.push('')
+    this.tally(matched).forEach((text: string) => list.push(text))
+    await this.createSpeechAsync(list.join('\n'))
   }
 
   private tallyWeekly(weekly: Map<number, Map<string, RegExpMatchArray[]>>): void {
