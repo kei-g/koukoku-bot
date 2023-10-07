@@ -232,23 +232,8 @@ export class Bot implements AsyncDisposable, BotInterface {
       await this.sendAsync(`[Bot] キーワード${command}の構文が正しくありません`)
     else {
       const keywords = createMap(await this.db.hGetAll(Bot.UserKeywordKey))
-      if (keywords.size === 0)
-        await this.sendAsync('[Bot] キーワードは登録されていません')
-      else if (keywords.size < 10)
-        this.listUserKeywordsLater(keywords)
-      else
-        await this.createUserKeywordsSpeechAsync(command, keywords)
+      await (keywords.size === 0 ? this.sendAsync('[Bot] キーワードは登録されていません') : this.createUserKeywordsSpeechAsync(command, keywords))
     }
-  }
-
-  private listUserKeywordsLater(keywords: Map<string, string>): void {
-    queueMicrotask(
-      async () => {
-        for (const e of insertItemBetweenEachElement(keywords.entries(), undefined))
-          await (e instanceof Array ? this.sendAsync(`[Bot] キーワード "${e[0]} => ${e[1]}" が登録されています`) : sleepAsync(3000))
-        await this.sendAsync('[Bot] 登録されているキーワードは以上です')
-      }
-    )
   }
 
   private async loadIgnorePatternsAsync(): Promise<void> {
@@ -493,8 +478,6 @@ const descending = (lhs: number, rhs: number) => rhs - lhs
 
 const descendingByFrequency = (lhs: [string, RegExpMatchArray[]], rhs: [string, RegExpMatchArray[]]) => rhs[1].length - lhs[1].length
 
-const insertItemBetweenEachElement = <U, V>(source: Iterable<U>, item: V): (U | V)[] => [...source].reduce((result: (U | V)[], current: U) => (result.push(item, current), result), []).slice(1)
-
 const isNotBot = (matched: RegExpMatchArray) => !matched.groups.msg.startsWith('[Bot] ')
 
 const isNotTimeSignal = (matched: RegExpMatchArray) => !matched.groups.msg.startsWith('[時報] ')
@@ -510,8 +493,6 @@ const parseIntOr = (text: string, defaultValue: number, radix?: number) => {
   const c = parseInt(text, radix)
   return isNaN(c) ? defaultValue : c
 }
-
-const sleepAsync = (timeout: number) => new Promise<void>((resolve: () => void) => setTimeout(resolve, timeout))
 
 const updateParenthesisContext = (ctx: Parenthesis, c: string) => {
   const addendum = valueForParenthesis[c]
