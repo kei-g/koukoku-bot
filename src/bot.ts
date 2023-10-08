@@ -1,6 +1,26 @@
 import * as redis from '@redis/client'
 import * as tls from 'tls'
-import { BotInterface, DeepL, GitHub, IgnorePattern, KoukokuProxy, KoukokuServer, Log, NextHour, SJIS, Speech, Web, compileIgnorePattern, isDeepLError, isDeepLSuccess, isGitHubResponse, selectBodyOfLog, shouldBeIgnored, suppress } from '.'
+import {
+  BotInterface,
+  DeepL,
+  GitHub,
+  IgnorePattern,
+  KoukokuProxy,
+  KoukokuServer,
+  Log,
+  PeriodicSchedule,
+  PeriodicScheduler,
+  SJIS,
+  Speech,
+  Web,
+  compileIgnorePattern,
+  isDeepLError,
+  isDeepLSuccess,
+  isGitHubResponse,
+  selectBodyOfLog,
+  shouldBeIgnored,
+  suppress,
+} from '.'
 import { EventEmitter } from 'stream'
 import { RedisCommandArgument } from '@redis/client/dist/lib/commands'
 import { createHash } from 'crypto'
@@ -31,10 +51,11 @@ export class Bot implements AsyncDisposable, BotInterface {
   private readonly ignorePatterns = [] as IgnorePattern[]
   private readonly interval: NodeJS.Timeout
   private readonly lang = new DeepL.LanguageMap()
-  private readonly nextHour = new NextHour()
   private readonly pending = [] as Buffer[]
   private readonly recent = { list: [] as Log[], map: new Map<string, Log>(), set: new Set<string>() }
+  private readonly scheduler = new PeriodicScheduler()
   private readonly speechesSet = new Set<Speech>()
+  private readonly timeSignals = [] as TimeSignal[]
   private readonly userKeywords = new Set<string>()
   private readonly web: Web
 
@@ -49,8 +70,19 @@ export class Bot implements AsyncDisposable, BotInterface {
     this.client.setNoDelay(false)
     this.interval = setInterval(KoukokuProxy.pingAsync, parseIntOr(process.env.PROXY_PING_INTERVAL, 120000))
     this.db = redis.createClient({ pingInterval: 15000, url: process.env.REDIS_URL })
-    this.nextHour.on('timeout', this.announceTimeSignalAsync.bind(this))
+    this.scheduler.register(this.announceTimeSignalAsync.bind(this), 'minutely')
     this.web = new Web(this)
+  }
+
+  private acceptIfTimeSignal(id: string, message: string): void {
+    if (message.startsWith('[時報] ') && !message.includes('代理')) {
+      const matched = message.replaceAll(' ', '').match(/\d+年\d+月\d+日\d+時\d+分\d+秒/)
+      if (matched) {
+        const hrtime = process.hrtime.bigint()
+        const time = new Date(matched[0])
+        this.timeSignals.unshift({ id, hrtime, time })
+      }
+    }
   }
 
   private async acceptKoukoku(data: Buffer): Promise<void> {
@@ -61,23 +93,27 @@ export class Bot implements AsyncDisposable, BotInterface {
         this.web.broadcast(log)
         const { groups } = matched
         const g = groups
+        this.acceptIfTimeSignal(log.id, g.msg)
         if (!g.self && !(await this.handleCanonicalCommandsAsync(g.msg)))
           await this.testUserKeywordsAsync(matched)
       }
   }
 
-  private async announceTimeSignalAsync(): Promise<void> {
-    const now = new Date()
-    const [month, date, hour, minute, second] = [
-      now.getMonth() + 1,
-      now.getDate(),
-      now.getHours(),
-      now.getMinutes(),
-      now.getSeconds(),
-    ].map((value: number) => ('0' + value.toString()).slice(-2))
-    await this.sendAsync(`[時報] ${now.getFullYear()} 年 ${month} 月 ${date} 日 ${hour} 時 ${minute} 分 ${second} 秒です (代理)`)
-    await sleepAsync(1000)
-    this.nextHour.start()
+  private async announceTimeSignalAsync(schedule: PeriodicSchedule): Promise<void> {
+    if (schedule.minute === 1) {
+      const signal = this.timeSignals.at(0)
+      if (!(schedule.time - schedule.delta - 65000000000n < signal?.hrtime)) { // unless within the latest 65seconds
+        const now = new Date()
+        const [month, date, hour, minute, second] = [
+          now.getMonth() + 1,
+          now.getDate(),
+          now.getHours(),
+          now.getMinutes(),
+          now.getSeconds(),
+        ].map((value: number) => ('0' + value.toString()).slice(-2))
+        await this.sendAsync(`[時報] ${now.getFullYear()} 年 ${month} 月 ${date} 日 ${hour} 時 ${minute} 分 ${second} 秒です (代理)`)
+      }
+    }
   }
 
   private async appendLogAsync(text: string): Promise<Log> {
@@ -112,7 +148,6 @@ export class Bot implements AsyncDisposable, BotInterface {
 
   private connected(): void {
     this.client.write('nobody\r\n')
-    this.nextHour.start()
   }
 
   async createSpeechAsync(text: string, maxLength: number = 64, remark: boolean = true): Promise<Speech> {
@@ -454,7 +489,7 @@ export class Bot implements AsyncDisposable, BotInterface {
 
   async[Symbol.asyncDispose](): Promise<void> {
     console.log('disposing bot...')
-    this.nextHour.stop()
+    this.scheduler[Symbol.dispose]()
     clearInterval(this.interval)
     console.log('disposing web...')
     this.web[Symbol.dispose]()
@@ -474,6 +509,12 @@ type Parenthesis = {
 }
 
 type Predicate<T> = (value: T) => boolean
+
+type TimeSignal = {
+  hrtime: bigint
+  id: string
+  time: Date
+}
 
 const composeLog = (last: { host?: string, message?: string }, matched: RegExpMatchArray): string => {
   const current = {
