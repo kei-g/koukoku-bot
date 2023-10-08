@@ -46,7 +46,6 @@
   "typescript.preferences.quoteStyle": "single",
   "typescript.tsdk": "./node_modules/typescript/lib",
   "typescript.updateImportsOnFileMove.enabled": "always",
-  "vsintellicode.modify.editor.suggestSelection": "automaticallyOverrodeDefaultValue",
   "html.format.wrapLineLength": 256,
   "[json]": {
     "editor.defaultFormatter": "vscode.json-language-features",

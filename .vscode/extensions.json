@@ -10,6 +10,7 @@
     "dbaeumer.vscode-eslint",
     "editorconfig.editorconfig",
     "kisstkondoros.vscode-codemetrics",
+    "ms-python.python",
     "ms-vscode.cpptools-extension-pack",
     "streetsidesoftware.code-spell-checker",
     "zignd.html-css-class-completion"

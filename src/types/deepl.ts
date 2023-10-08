@@ -5,14 +5,29 @@ export type DeepLError = {
 export type DeepLResult = DeepLError | DeepLSuccess
 
 export type DeepLSuccess = {
-  translations: {
-    detected_source_language: string
-    text: string
-  }[]
+  translations: Translation[]
 }
 
-export const isDeepLError = (result: DeepLResult | Error | string): result is DeepLError => isDeepLResult(result) && 'message' in result && typeof result.message === 'string'
+type Translation = {
+  detected_source_language: string
+  text: string
+}
 
-export const isDeepLResult = (result: DeepLResult | Error | string): result is DeepLResult => typeof result === 'object' && !(result instanceof Error) && ('message' in result || 'translations' in result)
+export const isDeepLError = (value: unknown): value is DeepLError | Error => isErrorLike(value)
 
-export const isDeepLSuccess = (result: DeepLResult | Error | string): result is DeepLSuccess => isDeepLResult(result) && 'translations' in result && typeof result.translations === 'object' && result.translations instanceof Array
+export const isDeepLResult = (value: unknown): value is DeepLResult => isDeepLError(value) || isDeepLSuccess(value)
+
+export const isDeepLSuccess = (value: unknown): value is DeepLSuccess => {
+  const success = value as DeepLSuccess
+  return typeof success === 'object' && success.translations instanceof Array && success.translations.every(isTranslationLike)
+}
+
+export const isErrorLike = (value: unknown): value is DeepLError | Error => {
+  const error = value as Error
+  return typeof error === 'object' && typeof error.message === 'string'
+}
+
+const isTranslationLike = (value: unknown): value is Translation => {
+  const t = value as Translation
+  return typeof t === 'object' && typeof t.detected_source_language === 'string' && typeof t.text === 'string'
+}

@@ -1,6 +1,6 @@
 import * as redis from '@redis/client'
 import * as tls from 'tls'
-import { Action, BotInterface, DeepL, GitHub, IgnorePattern, KoukokuProxy, KoukokuServer, Log, SJIS, Speech, Web, compileIgnorePattern, isDeepLError, isDeepLSuccess, isGitHubResponse, selectBodyOfLog, shouldBeIgnored, suppress } from '.'
+import { Action, BotInterface, DeepL, DeepLError, GitHub, IgnorePattern, KoukokuProxy, KoukokuServer, Log, PhiLLM, SJIS, Speech, Web, compileIgnorePattern, isDeepLError, isDeepLSuccess, isGitHubResponse, selectBodyOfLog, shouldBeIgnored, suppress } from '.'
 import { EventEmitter } from 'stream'
 import { RedisCommandArgument } from '@redis/client/dist/lib/commands'
 import { createHash } from 'crypto'
@@ -8,6 +8,7 @@ import { readFile } from 'fs/promises'
 
 export class Bot implements AsyncDisposable, BotInterface {
   private static readonly CalcRE = /^計算\s(?<expr>[πEIPaceginopstx\d\s.+\-*/%()]+)$/
+  private static readonly DialogueRE = /^対話\s(?<body>.+)$/
   private static readonly HelpRE = /^(?<command>コマンド(リスト)?|ヘルプ)$/
   private static readonly LogRE = /^(バック)?ログ(\s+((?<command>--help)|(?<count>[1-9]\d*)))?$/
   private static readonly MessageRE = />>\s「\s(?<msg>[^」]+)\s」\(チャット放話\s-\s(?<date>\d\d\/\d\d\s\([^)]+\))\s(?<time>\d\d:\d\d:\d\d)\sby\s(?<host>[^\s]+)\s君(\s(?<self>〈＊あなた様＊〉))?\)\s<</g
@@ -26,6 +27,7 @@ export class Bot implements AsyncDisposable, BotInterface {
   private readonly _bound: (data: Buffer) => void
   private readonly client: tls.TLSSocket
   private readonly db: redis.RedisClientType
+  private dialogue: PhiLLM.Dialogue
   private readonly ignorePatterns = [] as IgnorePattern[]
   private readonly interval: NodeJS.Timeout
   private readonly lang = new DeepL.LanguageMap()
@@ -91,6 +93,10 @@ export class Bot implements AsyncDisposable, BotInterface {
     catch (reason: unknown) {
       await this.sendAsync(`[Bot] 計算エラー, ${reason instanceof Error ? reason.message : reason}`)
     }
+  }
+
+  private async complainTranslationError(error: DeepLError | Error | string): Promise<void> {
+    await this.sendAsync(`[Bot] 翻訳エラー, ${typeof error === 'string' ? error : error.message}`)
   }
 
   private connected(): void {
@@ -181,6 +187,20 @@ export class Bot implements AsyncDisposable, BotInterface {
     return [null, name, command, null][u * 2 + v]
   }
 
+  private async dialogueAsync(matched: RegExpMatchArray): Promise<void> {
+    const { body } = matched.groups
+    let r = await DeepL.translateAsync(body, 'EN')
+    if (isDeepLSuccess(r)) {
+      const response = await this.dialogue?.speakAsync(r.translations[0].text)
+      if (response instanceof Error)
+        return await this.sendAsync(`[Bot] 対話中にエラーが発生しました, ${response.message}`)
+      r = await DeepL.translateAsync(response, 'JA')
+      if (isDeepLSuccess(r))
+        return await this.sendAsync(`[Bot] ${r.translations[0].text.replaceAll(/\r?\n/g, '')}`)
+    }
+    await this.complainTranslationError(r as unknown as DeepLError)
+  }
+
   private getUserKeywordRepliesAsync(includes: Predicate<string>): Promise<string>[] {
     return [...this.userKeywords].filter(includes).map(this.db.hGet.bind(this.db, Bot.UserKeywordKey))
   }
@@ -188,6 +208,7 @@ export class Bot implements AsyncDisposable, BotInterface {
   private async handleCanonicalCommandsAsync(text: string): Promise<boolean> {
     const patterns = [
       { e: Bot.CalcRE, f: this.calculateAsync.bind(this) },
+      { e: Bot.DialogueRE, f: this.dialogueAsync.bind(this) },
       { e: Bot.HelpRE, f: this.describeGeneralHelp.bind(this) },
       { e: Bot.LogRE, f: this.locateLogsAsync.bind(this) },
       { e: Bot.TallyRE, f: this.handleTallyCommandAsync.bind(this) },
@@ -319,6 +340,13 @@ export class Bot implements AsyncDisposable, BotInterface {
   }
 
   async startAsync(): Promise<void> {
+    PhiLLM.Dialogue.create(
+      {
+        maxLength: 50,
+      }
+    ).then(
+      (dialogue: PhiLLM.Dialogue) => this.dialogue = dialogue
+    )
     await Promise.allSettled(
       [
         this.db.connect(),
@@ -439,6 +467,7 @@ export class Bot implements AsyncDisposable, BotInterface {
     jobs.push(this.db.disconnect())
     console.log('disconnecting from telnet server...')
     this.client.end()
+    this.dialogue?.[Symbol.dispose]?.()
     await Promise.all(jobs)
     console.log('done')
   }
