@@ -44,8 +44,8 @@ export class Bot implements AsyncDisposable, BotInterface {
     const opts = { rejectUnauthorized: server.rejectUnauthorized }
     this.client = tls.connect(port, serverName, opts, this.connected.bind(this))
     this.client.on('data', this._bound)
-    this.client.setKeepAlive(true)
-    this.client.setNoDelay(false)
+    this.client.setKeepAlive(true, 15000)
+    this.client.setNoDelay(true)
     this.interval = setInterval(KoukokuProxy.pingAsync, parseIntOr(process.env.PROXY_PING_INTERVAL, 120000))
     this.db = redis.createClient({ pingInterval: 15000, url: process.env.REDIS_URL })
     this.web = new Web(this)
@@ -327,7 +327,6 @@ export class Bot implements AsyncDisposable, BotInterface {
 
   private async sendAsync(text: string): Promise<void> {
     process.stdout.write(text + '\n')
-    this.client.write('ping\r\n')
     await KoukokuProxy.sendAsync(text)
   }
 
