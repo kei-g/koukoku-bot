@@ -487,6 +487,7 @@ const composeLog = (last: { host?: string, message?: string }, matched: RegExpMa
   current.host === last.host ? current.host = '〃' : last.host = current.host
   current.message === last.message ? current.message = '〃' : last.message = current.message
   return [
+    matched.groups.date,
     matched.groups.time,
     current.message,
     current.host,
