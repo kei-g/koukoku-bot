@@ -1,5 +1,5 @@
 import WebSocket from 'ws'
-import { Action, BotInterface, Log, Speech, replaceVariables, suppress } from '.'
+import { Action, BotInterface, Log, GitHubSpeech, replaceVariables, suppress, RedisStreamItem, Speech } from '.'
 import { IncomingMessage, Server, ServerResponse, createServer } from 'http'
 import { WebSocket as WebSocketClient, WebSocketServer } from 'ws'
 import { join as joinPath } from 'path'
@@ -10,7 +10,7 @@ type AsyncFunction = () => Promise<void>
 export class Web implements AsyncDisposable {
   private readonly assets = new Map<string, Buffer>()
   private readonly messages = new Array<string>()
-  private readonly pending = new WeakMap<WebSocketClient, Log[]>()
+  private readonly pending = new WeakMap<WebSocketClient, RedisStreamItem<Log | Speech>[]>()
   private readonly server: Server
   private readonly webClients = new Set<WebSocketClient>()
   private readonly webSocket: WebSocketServer
@@ -60,21 +60,21 @@ export class Web implements AsyncDisposable {
     this.messages.push('upgrade: ' + req.method + ' for ' + req.url)
   }
 
-  async broadcastAsync(value: Log): Promise<void> {
-    if (value) {
-      const json = JSON.stringify(value)
+  async broadcastAsync(item: RedisStreamItem<Log | Speech>): Promise<void> {
+    if (item) {
+      const json = JSON.stringify(item)
       const data = Buffer.from(json)
       const jobs = [] as Promise<Error | undefined>[]
       for (const client of this.webClients)
         if (client.readyState === WebSocketClient.OPEN)
           jobs.push(new Promise((resolve: Action<Error | undefined>) => client.send(data, resolve)))
         else
-          this.enqueuePending(client, value)
+          this.enqueuePending(client, item)
       await Promise.all(jobs)
     }
   }
 
-  private enqueuePending(client: WebSocketClient, ...data: Log[]): void {
+  private enqueuePending(client: WebSocketClient, ...data: RedisStreamItem<Log | Speech>[]): void {
     const list = this.pending.get(client)
     if (list)
       list.unshift(...data.reverse())
@@ -155,7 +155,7 @@ export class Web implements AsyncDisposable {
 
   private async notifyWebClient(client: WebSocketClient): Promise<void> {
     await this.bot.notifyWebClient(
-      async (data: Log[]) => {
+      async (data: RedisStreamItem<Log | Speech>[]) => {
         const json = JSON.stringify(data)
         const buffer = Buffer.from(json)
         client.readyState === WebSocketClient.OPEN
@@ -211,7 +211,7 @@ export class Web implements AsyncDisposable {
   private async respondStatusAsync(request: IncomingMessage, response: ServerResponse): Promise<void> {
     const status = { messages: this.messages, speeches: this.bot.speeches }
     status.speeches.forEach(
-      (speech: Speech) => speech.expiresAt = speech.expiresAt.toLocaleString()
+      (speech: GitHubSpeech) => speech.expiresAt = speech.expiresAt.toLocaleString()
     )
     const json = JSON.stringify(status, undefined, 2)
     const resource = Buffer.from(json)

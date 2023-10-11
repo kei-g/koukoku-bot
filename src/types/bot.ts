@@ -1,5 +1,5 @@
 import { EventEmitter } from 'stream'
-import { Log } from '.'
+import { GitHubSpeech, Log, RedisStreamItem, Speech } from '.'
 
 /**
  *
@@ -14,7 +14,7 @@ export interface BotInterface {
    *
    * @param send
    */
-  notifyWebClient(send: (data: Log[]) => Promise<void>): Promise<void>
+  notifyWebClient(send: (data: (RedisStreamItem<Log> | RedisStreamItem<Speech>)[]) => Promise<void>): Promise<void>
 
   /**
    *
@@ -25,12 +25,5 @@ export interface BotInterface {
   /**
    *
    */
-  get speeches(): Speech[]
-}
-
-export type Speech = {
-  content: string
-  expiresAt: Date | string
-  id: string
-  url: string
+  get speeches(): GitHubSpeech[]
 }

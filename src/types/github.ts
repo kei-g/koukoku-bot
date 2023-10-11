@@ -8,6 +8,13 @@ export type GitHubRawResponse = {
   url: string
 }
 
+export type GitHubSpeech = {
+  content: string
+  expiresAt: Date | string
+  id: string
+  url: string
+}
+
 export const isGitHubRawResponse = (response: unknown): response is GitHubRawResponse =>
   !(typeof response === 'string' || response instanceof Error)
   && typeof response === 'object'

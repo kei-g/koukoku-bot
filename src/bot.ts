@@ -1,6 +1,30 @@
 import * as redis from '@redis/client'
 import * as tls from 'tls'
-import { Action, BotInterface, DeepL, DeepLError, GitHub, IgnorePattern, KoukokuProxy, KoukokuServer, Log, PhiLLM, SJIS, Speech, Web, compileIgnorePattern, isDeepLError, isDeepLSuccess, isGitHubResponse, selectBodyOfLog, shouldBeIgnored, suppress, DeepLResult } from '.'
+import {
+  Action,
+  BotInterface,
+  DeepL,
+  DeepLError,
+  DeepLResult,
+  GitHub,
+  GitHubSpeech,
+  IgnorePattern,
+  KoukokuProxy,
+  KoukokuServer,
+  Log,
+  PhiLLM,
+  RedisStreamItem,
+  SJIS,
+  Speech,
+  Web,
+  compileIgnorePattern,
+  isDeepLError,
+  isDeepLSuccess,
+  isGitHubResponse,
+  isRedisStreamItemLog,
+  shouldBeIgnored,
+  suppress,
+} from '.'
 import { EventEmitter } from 'stream'
 import { RedisCommandArgument } from '@redis/client/dist/lib/commands'
 import { createHash } from 'crypto'
@@ -11,29 +35,32 @@ export class Bot implements AsyncDisposable, BotInterface {
   private static readonly DialogueRE = /^対話\s(?<body>.+)$/
   private static readonly HelpRE = /^(?<command>コマンド(リスト)?|ヘルプ)$/
   private static readonly LogRE = /^(バック)?ログ(\s+((?<command>--help)|(?<count>[1-9]\d*)))?$/
-  private static readonly MessageRE = />>\s「\s(?<msg>[^」]+)\s」\(チャット放話\s-\s(?<date>\d\d\/\d\d)\s\((?<dow>[日月火水木金土])\)\s(?<time>\d\d:\d\d:\d\d)\sby\s(?<host>[^\s]+)\s君(\s(?<self>〈＊あなた様＊〉))?\)\s<</g
+  static readonly MessageRE = />>\s「\s(?<msg>[^」]+)\s」\(チャット放話\s-\s(?<date>\d\d\/\d\d)\s\((?<dow>[日月火水木金土])\)\s(?<time>\d\d:\d\d:\d\d)\sby\s(?<host>[^\s]+)\s君(\s(?<self>〈＊あなた様＊〉))?\)\s<</g
+  private static readonly SpeechRE = /\s+(★☆){2}\s臨時ニユース\s緊急放送\s(☆★){2}\s(?<date>\p{scx=Han}+\s\d+\s年\s\d+\s月\s\d+\s日\s[日月火水木金土]曜)\s(?<time>\d{2}:\d{2})\s+★\sたった今、(?<host>[^\s]+)\s君より[\S\s]+★\s+＝{3}\s大演説の開闢\s＝{3}\s+(?<body>\S+(\s+\S+)*)\s+＝{3}\s大演説の終焉\s＝{3}\s+/gu
   private static readonly TallyRE = /^集計(\s(?<command>--help))?$/
   private static readonly TranslateRE = /^翻訳\s+((?<command>--(help|lang))|((?<lang>bg|cs|da|de|el|en|es|et|fi|fr|hu|id|it|ja|ko|lt|lv|nb|nl|pl|pt|ro|ru|sk|sl|sv|tr|uk|zh|bg|cs|da|de|el|en|es|et|fi|fr|hu|id|it|ja|ko|lt|lv|nb|nl|pl|pt|ro|ru|sk|sl|sv|tr|uk|zh)\s+)?(?<text>.+))$/i
   private static readonly UserKeywordRE = /^キーワード(?<command>一覧|登録|解除)?(\s(?<name>(--help|[\p{scx=Hiragana}\p{scx=Katakana}\p{scx=Han}\w]{1,8})))?(\s(?<value>[\p{scx=Common}\p{scx=Hiragana}\p{scx=Katakana}\p{scx=Han}\s\w\x21-\x2f\x3a-\x40\x5b-\x60\x7b-\x7e]+))?$/u
 
   private static get LogKey(): string {
-    return process.env.REDIS_LOG_KEY ?? 'koukoku'
+    return process.env.REDIS_LOG_KEY ?? 'koukoku:log'
   }
 
   private static get UserKeywordKey(): string {
-    return process.env.REDIS_USERKEYWORD_KEY ?? 'keywords'
+    return process.env.REDIS_USERKEYWORD_KEY ?? 'koukoku:keywords'
   }
 
   private readonly _bound: (data: Buffer) => void
   private readonly client: tls.TLSSocket
   private readonly db: redis.RedisClientType
   private dialogue: PhiLLM.Dialogue
+  private idleTimerId: NodeJS.Timeout
   private readonly ignorePatterns = [] as IgnorePattern[]
   private readonly interval: NodeJS.Timeout
   private readonly lang = new DeepL.LanguageMap()
   private readonly pending = [] as Buffer[]
-  private readonly recent = { list: [] as Log[], map: new Map<string, Log>(), set: new Set<string>() }
-  private readonly speechesSet = new Set<Speech>()
+  private readonly received = [] as Buffer[]
+  private readonly recent = [] as (RedisStreamItem<Log> | RedisStreamItem<Speech>)[]
+  private readonly speechesSet = new Set<GitHubSpeech>()
   private readonly userKeywords = new Set<string>()
   private readonly web: Web
 
@@ -53,27 +80,31 @@ export class Bot implements AsyncDisposable, BotInterface {
   }
 
   private async acceptKoukoku(data: Buffer): Promise<void> {
+    const { idleTimerId } = this
+    this.idleTimerId = undefined
+    clearTimeout(idleTimerId)
     if (this.threshold < data.byteLength)
       for (const matched of data.toString().replaceAll(/\r?\n/g, '').matchAll(Bot.MessageRE)) {
         console.log(matched)
-        const log = await this.appendLogAsync(matched[0])
-        const job = this.web.broadcastAsync(log)
+        const item = await this.appendLogAsync(matched[0])
+        const job = this.web.broadcastAsync(item)
         const { groups } = matched
         const g = groups
         if (!g.self && !(await this.handleCanonicalCommandsAsync(g.msg)))
           await this.testUserKeywordsAsync(matched)
         await job
       }
+    else
+      this.received.push(Buffer.from(data.toString().replaceAll('\x07', '')))
+    this.idleTimerId = setTimeout(this.onIdle.bind(this), 1000)
   }
 
-  private async appendLogAsync(text: string): Promise<Log> {
+  private async appendLogAsync(text: string): Promise<RedisStreamItem<Log>> {
     const message = { log: text }
     const id = await this.db.xAdd(Bot.LogKey, '*', message)
-    const obj = { id, message }
-    this.recent.list.unshift(obj)
-    this.recent.map.set(id, obj)
-    this.recent.set.add(text)
-    return obj
+    const item = { id, message }
+    this.recent.unshift(item)
+    return item
   }
 
   private async calculateAsync(matched: RegExpMatchArray): Promise<void> {
@@ -104,7 +135,7 @@ export class Bot implements AsyncDisposable, BotInterface {
     this.client.write('nobody\r\n')
   }
 
-  async createSpeechAsync(text: string, maxLength: number = 64, remark: boolean = true): Promise<Speech> {
+  async createSpeechAsync(text: string, maxLength: number = 64, remark: boolean = true): Promise<GitHubSpeech> {
     const now = new Date()
     const salt = Buffer.from(now.toISOString(), 'ascii')
     const sha256 = createHash('sha256')
@@ -284,16 +315,15 @@ export class Bot implements AsyncDisposable, BotInterface {
       return await this.describeLogAsync(matched)
     const contents = [] as string[]
     const last = {} as { host?: string, message?: string }
-    for (const line of this.recent.list.map(selectBodyOfLog))
-      for (const m of [...line.matchAll(Bot.MessageRE)].filter(isNotBot).filter(isNotTimeSignal)) {
-        const text = composeLog(last, m)
-        contents.push(text)
-      }
+    for (const item of this.recent)
+      isRedisStreamItemLog(item)
+        ? contents.push(...composeLogs(last, item))
+        : contents.push(composeLogFromSpeech(last, item))
     await this.createSpeechAsync(contents.slice(0, Math.min(parseIntOr(count, 10), 30)).join('\n'))
   }
 
-  async notifyWebClient(send: (data: Log[]) => Promise<void>): Promise<void> {
-    await send(this.recent.list)
+  async notifyWebClient(send: (data: (RedisStreamItem<Log> | RedisStreamItem<Speech>)[]) => Promise<void>): Promise<void> {
+    await send(this.recent)
   }
 
   observe(target: EventEmitter): void {
@@ -310,15 +340,50 @@ export class Bot implements AsyncDisposable, BotInterface {
     )
   }
 
+  private async onIdle(): Promise<void> {
+    const data = Buffer.concat(this.received)
+    const text = data.toString()
+    const jobs = [] as Promise<void>[]
+    const last = {} as { position?: number }
+    for (const matched of text.matchAll(Bot.SpeechRE)) {
+      last.position = matched.index + matched[0].length
+      const hash = createHash('sha256')
+      hash.update(matched[0])
+      const digest = hash.digest().toString('hex')
+      const { body, date, host, time } = matched.groups
+      const message = {
+        body,
+        date,
+        hash: digest,
+        host,
+        time,
+      }
+      const job = this.db.xAdd(Bot.LogKey, '*', message).then(
+        (id: string): void => this.updateRecent({ id, message })
+      )
+      jobs.push(job)
+      console.log(message)
+    }
+    if (0 < last.position) {
+      const { byteLength } = Buffer.from(text.slice(0, last.position))
+      this.received.splice(0)
+      this.received.push(data.subarray(byteLength))
+    }
+    await Promise.all(jobs)
+  }
+
   private postponeKoukoku(data: Buffer): void {
-    if (this.threshold < data.byteLength)
-      this.pending.push(data)
+    (this.threshold < data.byteLength ? this.pending : this.received).push(data)
   }
 
   private async queryLogAsync(start: RedisCommandArgument, end: RedisCommandArgument): Promise<void> {
-    const list = (await this.db.xRevRange(Bot.LogKey, start, end)).reverse() as unknown as Log[]
-    list.forEach(this.updateRecent.bind(this))
-    this.recent.list.sort((lhs: Log, rhs: Log) => [-1, 1][+(lhs.id < rhs.id)])
+    const list = await this.db.xRevRange(Bot.LogKey, start, end) as (RedisStreamItem<Log> | RedisStreamItem<Speech>)[]
+    list.reverse()
+    for (const item of list)
+      this.updateRecent(item)
+    this.recent.sort(
+      (lhs: RedisStreamItem<Log | Speech>, rhs: RedisStreamItem<Log | Speech>) => [-1, 1][+(lhs.id < rhs.id)]
+    )
   }
 
   private async queryUserKeywordsAsync(): Promise<void> {
@@ -344,7 +409,7 @@ export class Bot implements AsyncDisposable, BotInterface {
     return !shouldBeIgnored(matched, this.ignorePatterns)
   }
 
-  get speeches(): Speech[] {
+  get speeches(): GitHubSpeech[] {
     return [...this.speechesSet]
   }
 
@@ -399,7 +464,7 @@ export class Bot implements AsyncDisposable, BotInterface {
   private tallyWeekly(weekly: Map<number, Map<string, RegExpMatchArray[]>>): void {
     const now = new Date()
     const epoch = new Date(now.getFullYear(), 0, 1).getTime()
-    for (const item of this.recent.list)
+    for (const item of this.recent.filter(isRedisStreamItemLog))
       for (const m of item.message.log.matchAll(Bot.MessageRE)) {
         const timestamp = new Date(parseInt(item.id.split('-')[0])).getTime()
         const numberOfDays = Math.floor((timestamp - epoch) / (24 * 60 * 60 * 1000))
@@ -451,16 +516,14 @@ export class Bot implements AsyncDisposable, BotInterface {
     await this.sendAsync(text)
   }
 
-  private updateRecent(log: Log): void {
-    if (!this.recent.set.has(log.message.log)) {
-      const index = this.recent.list.findIndex((value: Log) => value.id < log.id)
-      const rhs = this.recent.list.splice(index)
-      this.recent.list.push(log)
-      if (rhs.length)
-        this.recent.list.push(...rhs)
-      this.recent.map.set(log.id, log)
-      this.recent.set.add(log.message.log)
-    }
+  private updateRecent(item: RedisStreamItem<Log> | RedisStreamItem<Speech>): void {
+    const index = this.recent.findIndex(
+      (value: RedisStreamItem<Log | Speech>) => value.id < item.id
+    )
+    const rhs = this.recent.splice(index)
+    this.recent.push(item)
+    if (rhs.length)
+      this.recent.push(...rhs)
   }
 
   async[Symbol.asyncDispose](): Promise<void> {
@@ -489,19 +552,36 @@ type Parenthesis = {
 
 type Predicate<T> = (value: T) => boolean
 
-const composeLog = (last: { host?: string, message?: string }, matched: RegExpMatchArray): string => {
+function* composeLogs(last: { host?: string, message?: string }, item: RedisStreamItem<Log>) {
+  for (const line of item.message.log.split(/\r?\n/))
+    for (const matched of [...line.matchAll(Bot.MessageRE)].filter(isNotBot).filter(isNotTimeSignal)) {
+      const current = {
+        host: matched.groups.host.replaceAll(/(\*+[-.]?)+/g, ''),
+        message: matched.groups.msg.trim(),
+      }
+      current.host === last.host ? current.host = '〃' : last.host = current.host
+      current.message === last.message ? current.message = '〃' : last.message = current.message
+      yield [
+        matched.groups.date,
+        matched.groups.time,
+        current.message,
+        current.host,
+      ].join(' ')
+    }
+}
+
+const composeLogFromSpeech = (last: { host?: string, message?: string }, item: RedisStreamItem<Speech>): string => {
+  const lines = item.message.body.split(/\r?\n/)
+  const { length } = lines
+  const suffix = [` ${length - 1} 行省略`, ''][+(length === 1)]
   const current = {
-    host: matched.groups.host.replaceAll(/(\*+[-.]?)+/g, ''),
-    message: matched.groups.msg.trim(),
+    host: item.message.host.replaceAll(/(\*+[-.]?)+/g, ''),
   }
   current.host === last.host ? current.host = '〃' : last.host = current.host
-  current.message === last.message ? current.message = '〃' : last.message = current.message
-  return [
-    matched.groups.date,
-    matched.groups.time,
-    current.message,
-    current.host,
-  ].join(' ')
+  delete last.message
+  const matched = item.message.date.match(/(?<month>\d+)\s月\s(?<day>\d+)\s日/)
+  const { month, day } = matched.groups
+  return `${month}/${day} ${item.message.time}:** ${lines[0]}${suffix} ${current.host}`
 }
 
 const createMap = (obj: { [key: string]: string }) => {

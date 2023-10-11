@@ -1,4 +1,4 @@
-import { Log } from '../types'
+import { Log, RedisStreamItem, Speech, isRedisStreamItemLog } from '../types'
 
 class Client {
   readonly #document: Document
@@ -7,12 +7,38 @@ class Client {
   readonly #removeChild: <T extends Node>(child: T) => T
   #webSocket: WebSocket
 
-  #prepend(data: Log): void {
-    const li = this.#document.getElementById(data.id)
+  #prepend(item: RedisStreamItem<Log> | RedisStreamItem<Speech>): void {
+    const li = this.#document.getElementById(item.id)
+    isRedisStreamItemLog(item)
+      ? this.#prependLog(item, li)
+      : this.#prependSpeech(item, li)
+  }
+
+  #prependLog(item: RedisStreamItem<Log>, li: HTMLElement): void {
     if (li)
-      li.textContent = data.message.log
+      li.textContent = item.message.log
     else {
-      const li = createListItemNode(this.#document, data.id, data.message.log)
+      const li = createListItemNode(this.#document, item.id, item.message.log)
+      this.#messages.prepend(li)
+      this.#loading.splice(0).forEach(this.#removeChild)
+    }
+  }
+
+  #prependSpeech(item: RedisStreamItem<Speech>, li: HTMLElement): void {
+    if (li) {
+      removeAllChildren(li)
+      for (const text of item.message.body.split(/\r?\n/)) {
+        li.append(document.createTextNode(text))
+        li.append(document.createElement('br'))
+      }
+    }
+    else {
+      const li = document.createElement('li')
+      li.setAttribute('id', item.id)
+      for (const text of item.message.body.split(/\r?\n/)) {
+        li.append(document.createTextNode(text))
+        li.append(document.createElement('br'))
+      }
       this.#messages.prepend(li)
       this.#loading.splice(0).forEach(this.#removeChild)
     }
@@ -33,7 +59,7 @@ class Client {
     this.#webSocket.addEventListener(
       'message',
       async (msg: MessageEvent<WebSocketMessage>) => {
-        const data = JSON.parse(await msg.data.text())
+        const data = JSON.parse(await msg.data.text()) as RedisStreamItem<Log>[]
         data instanceof Array
           ? data.slice(0, 100).reverse().map(this.#prepend.bind(this))
           : this.#prepend(data)
@@ -114,6 +140,11 @@ const qualifyURL = (document: Document, last: HasOffset, li: HTMLLIElement, matc
   a.appendChild(text)
   li.appendChild(a)
   last.offset = matched.index + matched[0].length
+}
+
+const removeAllChildren = (element: HTMLElement): void => {
+  while (element.childElementCount)
+    element.firstChild.remove()
 }
 
 const urlRE = /https?:\/\/[\w!?/+\-_~=;.,*&@#$%()'[\]]+/g

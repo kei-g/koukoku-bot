@@ -34,7 +34,7 @@
     "build:assets": "run-p build:assets:*",
     "build:assets:conf": "tools/generate-sjis-json.sh",
     "build:assets:favicon": "tools/generate-favicon.sh",
-    "build:assets:js": "esbuild src/assets/main.ts --format=esm --minify --outfile=assets/main.js --platform=browser --target=es2020",
+    "build:assets:js": "esbuild src/assets/main.ts --bundle --format=esm --minify --outfile=assets/main.js --platform=browser --target=es2020",
     "clean": "rimraf dist/",
     "lint": "eslint src/**/*.ts",
     "start": "node dist/main.js",
