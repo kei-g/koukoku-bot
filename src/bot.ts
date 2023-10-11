@@ -1,6 +1,6 @@
 import * as redis from '@redis/client'
 import * as tls from 'tls'
-import { Action, BotInterface, DeepL, DeepLError, GitHub, IgnorePattern, KoukokuProxy, KoukokuServer, Log, PhiLLM, SJIS, Speech, Web, compileIgnorePattern, isDeepLError, isDeepLSuccess, isGitHubResponse, selectBodyOfLog, shouldBeIgnored, suppress } from '.'
+import { Action, BotInterface, DeepL, DeepLError, GitHub, IgnorePattern, KoukokuProxy, KoukokuServer, Log, PhiLLM, SJIS, Speech, Web, compileIgnorePattern, isDeepLError, isDeepLSuccess, isGitHubResponse, selectBodyOfLog, shouldBeIgnored, suppress, DeepLResult } from '.'
 import { EventEmitter } from 'stream'
 import { RedisCommandArgument } from '@redis/client/dist/lib/commands'
 import { createHash } from 'crypto'
@@ -44,6 +44,7 @@ export class Bot implements AsyncDisposable, BotInterface {
     const opts = { rejectUnauthorized: server.rejectUnauthorized }
     this.client = tls.connect(port, serverName, opts, this.connected.bind(this))
     this.client.on('data', this._bound)
+    this.client.on('error', (_reason: unknown) => undefined)
     this.client.setKeepAlive(true, 15000)
     this.client.setNoDelay(true)
     this.interval = setInterval(KoukokuProxy.pingAsync, parseIntOr(process.env.PROXY_PING_INTERVAL, 120000))
@@ -95,8 +96,8 @@ export class Bot implements AsyncDisposable, BotInterface {
     }
   }
 
-  private async complainTranslationError(error: DeepLError | Error | string): Promise<void> {
-    await this.sendAsync(`[Bot] 翻訳エラー, ${typeof error === 'string' ? error : error.message}`)
+  private async complainTranslationError(error: DeepLError | Error): Promise<void> {
+    await this.sendAsync(`[Bot] 翻訳エラー, ${error.message}`)
   }
 
   private connected(): void {
@@ -191,14 +192,23 @@ export class Bot implements AsyncDisposable, BotInterface {
     const { body } = matched.groups
     let r = await DeepL.translateAsync(body, 'EN')
     if (isDeepLSuccess(r)) {
-      const response = await this.dialogue?.speakAsync(r.translations[0].text)
-      if (response instanceof Error)
-        return await this.sendAsync(`[Bot] 対話中にエラーが発生しました, ${response.message}`)
-      r = await DeepL.translateAsync(response, 'JA')
+      r = await this.dialogueTranslatedAsync(r.translations[0].text)
       if (isDeepLSuccess(r))
-        return await this.sendAsync(`[Bot] ${r.translations[0].text.replaceAll(/\r?\n/g, '')}`)
+        return
     }
-    await this.complainTranslationError(r as unknown as DeepLError)
+    await this.complainTranslationError(r)
+  }
+
+  private async dialogueTranslatedAsync(message: string): Promise<DeepLResult | Error> {
+    const response = await this.dialogue?.speakAsync(message)
+    if (response instanceof Error)
+      await this.sendAsync(`[Bot] 対話中にエラーが発生しました, ${response.message}`)
+    else {
+      const translated = await DeepL.translateAsync(response, 'JA')
+      if (isDeepLSuccess(translated))
+        await this.sendAsync(`[Bot] ${translated.translations[0].text.replaceAll(/\r?\n/g, '')}`)
+      return translated
+    }
   }
 
   private getUserKeywordRepliesAsync(includes: Predicate<string>): Promise<string>[] {
@@ -421,7 +431,7 @@ export class Bot implements AsyncDisposable, BotInterface {
     const r = await DeepL.translateAsync(decodeURI(text), lang)
     if (isDeepLError(r))
       await this.sendAsync(`[Bot] 翻訳エラー, ${r.message}`)
-    else if (isDeepLSuccess(r))
+    else
       for (const t of r.translations) {
         const name = this.lang.getName(t.detected_source_language)
         const escaped = await SJIS.escape(t.text.replaceAll(/\r?\n/g, '').trim())

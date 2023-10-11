@@ -1,7 +1,13 @@
 import { ClientRequest, IncomingMessage } from 'http'
 import { bind1st } from '..'
 
-const concatenateBuffers = <T>(resolve: (value: Error | T | string) => void, response: IncomingMessage) => {
+class UnexpectedContentTypeError extends Error {
+  constructor(readonly contentType: string, readonly text: string) {
+    super(`unexpected content type, ${contentType}`)
+  }
+}
+
+const concatenateBuffers = <T>(resolve: (value: Error | T) => void, response: IncomingMessage) => {
   const contentType = response.headers['content-type']
   const list = [] as Buffer[]
   response.on('data', list.push.bind(list))
@@ -9,24 +15,26 @@ const concatenateBuffers = <T>(resolve: (value: Error | T | string) => void, res
     'end',
     () => {
       const text = Buffer.concat(list).toString()
-      resolve(contentType?.startsWith('application/json') ? JSON.parse(text) as T : text)
+      resolve(
+        contentType?.startsWith('application/json')
+          ? JSON.parse(text) as T
+          : new UnexpectedContentTypeError(contentType, text)
+      )
     }
   )
   response.on('error', resolve)
 }
 
-const debug = <T>(host: string, value: Error | T | string): void => {
+const debug = <T>(host: string, value: Error | T): void => {
   if (value instanceof Error)
     process.stderr.write(`[${host}] '\x1b[31m${value.message}\x1b[m'\n`)
-  else if (typeof value === 'string')
-    process.stdout.write(`[${host}] '\x1b[32m${value}\x1b[m'\n`)
   else if (typeof value === 'object')
     process.stdout.write(`[${host}] ${JSON.stringify(value)}\n`)
 }
 
-export const receiveAsJsonAsync = async <T>(request: ClientRequest, content: Buffer): Promise<Error | T | string> => {
+export const receiveAsJsonAsync = async <T>(request: ClientRequest, content: Buffer): Promise<Error | T> => {
   const task = new Promise(
-    (resolve: (value: Error | T | string) => void) => {
+    (resolve: (value: Error | T) => void) => {
       request.on('error', resolve)
       request.on('response', bind1st(resolve, concatenateBuffers))
     }
