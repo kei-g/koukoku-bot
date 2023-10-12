@@ -136,6 +136,7 @@ const qualifyURL = (document: Document, last: HasOffset, li: HTMLLIElement, matc
   }
   const a = document.createElement('a')
   a.setAttribute('href', matched[0])
+  a.setAttribute('target', '_blank')
   const text = document.createTextNode(matched[0])
   a.appendChild(text)
   li.appendChild(a)
