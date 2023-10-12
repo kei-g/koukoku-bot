@@ -423,9 +423,14 @@ export class Bot implements AsyncDisposable, BotInterface {
     )
     await Promise.allSettled(
       [
-        this.db.connect(),
-        this.queryUserKeywordsAsync(),
-        this.queryLogAsync('+', '-'),
+        this.db.connect().then(
+          () => Promise.allSettled(
+            [
+              this.queryLogAsync('+', '-'),
+              this.queryUserKeywordsAsync(),
+            ]
+          )
+        ),
         this.loadIgnorePatternsAsync(),
         this.web.loadAssetsAsync(),
       ]
