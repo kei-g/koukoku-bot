@@ -49,31 +49,20 @@ export class Bot implements AsyncDisposable, BotInterface {
     return process.env.REDIS_USERKEYWORD_KEY ?? 'koukoku:keywords'
   }
 
-  private readonly _bound: (data: Buffer) => void
-  private readonly client: tls.TLSSocket
+  private client: tls.TLSSocket
   private readonly db: redis.RedisClientType
   private dialogue: PhiLLM.Dialogue
   private idleTimerId: NodeJS.Timeout
   private readonly ignorePatterns = [] as IgnorePattern[]
   private readonly interval: NodeJS.Timeout
   private readonly lang = new DeepL.LanguageMap()
-  private readonly pending = [] as Buffer[]
   private readonly received = [] as Buffer[]
   private readonly recent = [] as (RedisStreamItem<Log> | RedisStreamItem<Speech>)[]
   private readonly speechesSet = new Set<GitHubSpeech>()
   private readonly userKeywords = new Set<string>()
   private readonly web: Web
 
-  constructor(server: KoukokuServer, private readonly threshold: number = 70) {
-    this._bound = this.postponeKoukoku.bind(this)
-    const port = server.port ?? 992
-    const serverName = server.name ?? 'koukoku.shadan.open.ad.jp'
-    const opts = { rejectUnauthorized: server.rejectUnauthorized }
-    this.client = tls.connect(port, serverName, opts, this.connected.bind(this))
-    this.client.on('data', this._bound)
-    this.client.on('error', (_reason: unknown) => undefined)
-    this.client.setKeepAlive(true, 15000)
-    this.client.setNoDelay(true)
+  constructor(private readonly server: KoukokuServer, private readonly threshold: number = 70) {
     this.interval = setInterval(KoukokuProxy.pingAsync, parseIntOr(process.env.PROXY_PING_INTERVAL, 120000))
     this.db = redis.createClient({ pingInterval: 15000, url: process.env.REDIS_URL })
     this.web = new Web(this)
@@ -97,6 +86,11 @@ export class Bot implements AsyncDisposable, BotInterface {
     else
       this.received.push(Buffer.from(data.toString().replaceAll('\x07', '')))
     this.idleTimerId = setTimeout(this.onIdle.bind(this), 1000)
+  }
+
+  private async acceptSession(data: Buffer): Promise<void> {
+    console.log(`new session key, ${data.byteLength} bytes received`)
+    await this.db.set('koukoku:session', data.toString('hex'))
   }
 
   private async appendLogAsync(text: string): Promise<RedisStreamItem<Log>> {
@@ -129,6 +123,24 @@ export class Bot implements AsyncDisposable, BotInterface {
 
   private async complainTranslationError(error: DeepLError | Error): Promise<void> {
     await this.sendAsync(`[Bot] 翻訳エラー, ${error.message}`)
+  }
+
+  private async connectAsync(): Promise<void> {
+    const { server } = this
+    const port = server.port ?? 992
+    const serverName = server.name ?? 'koukoku.shadan.open.ad.jp'
+    const opts = {
+      rejectUnauthorized: server.rejectUnauthorized,
+    } as tls.ConnectionOptions
+    const data = await this.db.get('koukoku:session')
+    if (data)
+      opts.session = Buffer.from(data, 'hex')
+    this.client = tls.connect(port, serverName, opts, this.connected.bind(this))
+    this.client.on('data', this.acceptKoukoku.bind(this))
+    this.client.on('error', (error: Error) => console.error({ error }))
+    this.client.on('session', this.acceptSession.bind(this))
+    this.client.setKeepAlive(true, 15000)
+    this.client.setNoDelay(true)
   }
 
   private connected(): void {
@@ -372,10 +384,6 @@ export class Bot implements AsyncDisposable, BotInterface {
     await Promise.all(jobs)
   }
 
-  private postponeKoukoku(data: Buffer): void {
-    (this.threshold < data.byteLength ? this.pending : this.received).push(data)
-  }
-
   private async queryLogAsync(start: RedisCommandArgument, end: RedisCommandArgument): Promise<void> {
     const list = await this.db.xRevRange(Bot.LogKey, start, end) as (RedisStreamItem<Log> | RedisStreamItem<Speech>)[]
     list.reverse()
@@ -435,10 +443,7 @@ export class Bot implements AsyncDisposable, BotInterface {
         this.web.loadAssetsAsync(),
       ]
     )
-    this.client.off('data', this._bound)
-    const store = this.acceptKoukoku.bind(this)
-    this.pending.splice(0).forEach(store)
-    this.client.on('data', store)
+    await this.connectAsync()
   }
 
   private tally(_matched: RegExpMatchArray): string[] {
