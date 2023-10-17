@@ -88,18 +88,19 @@ export class Bot implements AsyncDisposable, BotInterface {
     const { idleTimerId } = this
     this.idleTimerId = undefined
     clearTimeout(idleTimerId)
-    if (this.threshold < data.byteLength)
-      for (const matched of data.toString().replaceAll(/\r?\n/g, '').matchAll(Bot.MessageRE)) {
-        console.log(matched)
-        const item = await this.appendLogAsync(matched[0])
-        const job = this.web.broadcastAsync(item)
-        const { groups } = matched
-        const g = groups
-        this.acceptIfTimeSignal(item.id, g.msg)
-        if (!g.self && !(await this.handleCanonicalCommandsAsync(g.msg)))
-          await this.testUserKeywordsAsync(matched)
-        await job
+    if (this.threshold < data.byteLength) {
+      const text = data.toString().replaceAll(/\r?\n/g, '')
+      const matched = [...text.matchAll(Bot.MessageRE)]
+      const items = matched.map(this.appendLogAsync.bind(this))
+      const jobs = [] as Promise<void>[]
+      for (const { item, matched } of await Promise.all(items)) {
+        jobs.push(this.web.broadcastAsync(item))
+        this.acceptIfTimeSignal(item.id, matched.groups.msg)
+        if (!matched.groups.self)
+          jobs.push(this.handleCommandAsync(matched))
       }
+      await Promise.all(jobs)
+    }
     else
       this.received.push(Buffer.from(data.toString().replaceAll('\x07', '')))
     this.idleTimerId = setTimeout(this.onIdle.bind(this), 1000)
@@ -127,12 +128,17 @@ export class Bot implements AsyncDisposable, BotInterface {
     }
   }
 
-  private async appendLogAsync(text: string): Promise<RedisStreamItem<Log>> {
-    const message = { log: text }
-    const id = await this.db.xAdd(Bot.LogKey, '*', message)
+  private async appendLogAsync(matched: RegExpMatchArray): Promise<MatchedItem> {
+    const message = { log: matched[0] }
+    const job = this.db.xAdd(Bot.LogKey, '*', message)
+    console.log(matched)
+    const id = await job
     const item = { id, message }
     this.recent.unshift(item)
-    return item
+    return {
+      item,
+      matched,
+    }
   }
 
   private async calculateAsync(matched: RegExpMatchArray): Promise<void> {
@@ -292,24 +298,22 @@ export class Bot implements AsyncDisposable, BotInterface {
     return [...this.userKeywords].filter(includes).map(this.db.hGet.bind(this.db, Bot.UserKeywordKey))
   }
 
-  private async handleCanonicalCommandsAsync(text: string): Promise<boolean> {
-    const patterns = [
-      { e: Bot.CalcRE, f: this.calculateAsync.bind(this) },
-      { e: Bot.DialogueRE, f: this.dialogueAsync.bind(this) },
-      { e: Bot.HelpRE, f: this.describeGeneralHelp.bind(this) },
-      { e: Bot.LogRE, f: this.locateLogsAsync.bind(this) },
-      { e: Bot.TallyRE, f: this.handleTallyCommandAsync.bind(this) },
-      { e: Bot.TranslateRE, f: this.translateOrDescribeAsync.bind(this) },
-      { e: Bot.UserKeywordRE, f: this.handleUserKeywordCommandAsync.bind(this) },
-    ]
-    const placeholder = { matched: false }
-    for (const a of patterns) {
-      const matched = text.match(a.e)
-      if (matched)
-        await a.f(matched)
-      placeholder.matched = !!matched
-    }
-    return placeholder.matched
+  private async handleCommandAsync(matched: RegExpMatchArray): Promise<void> {
+    const handlers = [
+      { handle: this.calculateAsync, regexp: Bot.CalcRE },
+      { handle: this.dialogueAsync, regexp: Bot.DialogueRE },
+      { handle: this.describeGeneralHelp, regexp: Bot.HelpRE },
+      { handle: this.locateLogsAsync, regexp: Bot.LogRE },
+      { handle: this.handleTallyCommandAsync, regexp: Bot.TallyRE },
+      { handle: this.translateOrDescribeAsync, regexp: Bot.TranslateRE },
+      { handle: this.handleUserKeywordCommandAsync, regexp: Bot.UserKeywordRE },
+    ] as CommandHandler[]
+    const text = matched.groups.msg
+    const found = {} as { result?: RegExpMatchArray }
+    const command = handlers.find(
+      (a: CommandHandler) => !!(found.result ??= text.match(a.regexp))
+    )
+    await (command ? command.handle.bind(this)(found.result) : this.testUserKeywordsAsync(matched))
   }
 
   private async handleTallyCommandAsync(matched: RegExpMatchArray): Promise<void> {
@@ -588,6 +592,16 @@ export class Bot implements AsyncDisposable, BotInterface {
     await Promise.all(jobs)
     console.log('done')
   }
+}
+
+type CommandHandler = {
+  handle: (matched: RegExpMatchArray) => Promise<void>
+  regexp: RegExp
+}
+
+type MatchedItem = {
+  item: RedisStreamItem<Log>
+  matched: RegExpMatchArray
 }
 
 type Parenthesis = {
