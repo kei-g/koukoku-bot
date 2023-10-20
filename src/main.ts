@@ -1,4 +1,8 @@
-import { Bot, KoukokuServer } from '.'
+import {
+  Action,
+  BotService,
+  DependencyResolver,
+} from '.'
 import { readFile } from 'fs/promises'
 
 const catchAndExit = (reason?: unknown) => {
@@ -18,32 +22,43 @@ const demote = (): void => {
 
 const getUserEntryAsync = async (name: string): Promise<string[]> => {
   const data = await readFile('/etc/passwd')
-  return data.toString().split('\n').find((line: string) => line.split(':').at(0) === name)?.split(':')
+  return data.toString().split('\n').find(
+    (line: string) => line.split(':').at(0) === name
+  )?.split(':')
 }
 
 const main = async () => {
+  const { pid } = process
+  console.log(`process is running on pid:\x1b[33m${pid}\x1b[m\n`)
   const { env } = process
   const { SUDO_USER } = env
   if (SUDO_USER) {
+    console.log(`this process is executed by \x1b[32m${SUDO_USER}\x1b[m with 'sudo' command`)
     const entry = await getUserEntryAsync(SUDO_USER)
     env.HOME = entry?.at(-2)
+    console.log(`\x1b[32m${env.HOME}\x1b[m is set as $HOME`)
     env.SHELL = entry?.at(-1)
+    console.log(`\x1b[32m${env.SHELL}\x1b[m is set as $SHELL`)
   }
-  const introduction = await readFile('templates/introduction/periodic.txt')
-  const server = {} as KoukokuServer
-  server.introduction = introduction.toString()
-  server.port = parseInt(process.argv.at(3))
-  if (isNaN(server.port))
-    delete server.port
-  server.name = process.argv.at(2)
-  server.rejectUnauthorized = !process.argv.includes('--no-reject-unauthorized')
-  process.stdout.write(`process is running on pid:\x1b[33m${process.pid}\x1b[m with ${JSON.stringify(server)}\n\n`)
-  await using bot = new Bot(server)
+  const certificates = await Promise.all(
+    ['fullchain', 'privkey'].map(renameTo).map(readFileAsync)
+  )
+  await using bot = DependencyResolver.resolve(BotService, ...certificates)
   demote()
-  await bot.startAsync()
-  await waitForSignalAsync('SIGINT')
+  await bot.start()
+  await waitForSignals('SIGINT', 'SIGTERM')
 }
 
-const waitForSignalAsync = (signal: NodeJS.Signals): Promise<void> => new Promise((resolve: () => void) => process.on(signal, resolve))
+const readFileAsync = (path: string) => readFile(path).catch(
+  (reason: NodeJS.ErrnoException) => reason
+)
+
+const renameTo = (name: string) => `certificates/${name}.pem`
+
+const waitForSignals = (...signals: NodeJS.Signals[]): Promise<void> => new Promise(
+  (resolve: Action) => signals.map(
+    (signal: NodeJS.Signals) => process.on(signal, resolve)
+  )
+)
 
 main().catch(catchAndExit).then(() => process.exit(0))

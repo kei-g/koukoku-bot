@@ -1,3 +1,5 @@
+import { DeepL } from '..'
+
 export type DeepLError = {
   message: string
 }
@@ -9,7 +11,7 @@ export type DeepLSuccess = {
 }
 
 type Translation = {
-  detected_source_language: string
+  detected_source_language: DeepL.LanguageCode
   text: string
 }
 
