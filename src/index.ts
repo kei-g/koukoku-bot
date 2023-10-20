@@ -1,4 +1,3 @@
-export * from './bot'
 export * from './lib'
+export * from './services'
 export * from './types'
-export * from './web'

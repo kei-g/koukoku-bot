@@ -5,7 +5,7 @@ export type IgnorePattern = {
   value: RegExp | string
 }
 
-export type IgnoreTarget = 'host' | 'msg'
+export type IgnoreTarget = 'body' | 'host'
 
 export type IgnoreType = 'exact' | 'include' | 'regexp'
 

@@ -1,4 +1,4 @@
-import { Action, bind1st } from '..'
+import { Action } from '..'
 import { ClientRequest, IncomingMessage } from 'http'
 
 class UnexpectedContentTypeError extends Error {
@@ -6,6 +6,8 @@ class UnexpectedContentTypeError extends Error {
     super(`unexpected content type, ${contentType}`)
   }
 }
+
+const bind1st = <A1, O extends unknown[], R>(arg: A1, func: (arg: A1, ...args: O) => R) => (...args: O) => func(arg, ...args)
 
 export const bindToReadAsJSON = <T>(request: ClientRequest) => {
   const job = new Promise(
@@ -21,7 +23,7 @@ export const bindToReadAsJSON = <T>(request: ClientRequest) => {
   }
 }
 
-const concatenateBuffers = <T>(resolve: Action<Error | T>, response: IncomingMessage) => {
+const concatenateBuffers = <T>(resolve: Action<Error | T>, response: IncomingMessage): void => {
   const contentType = response.headers['content-type']
   const list = [] as Buffer[]
   response.on('data', list.push.bind(list))

@@ -1,15 +1,29 @@
-export const replaceVariables = (data: Buffer | string): Buffer => Buffer.from(replaceVariablesRecursively(data.toString()))
-
-const replaceVariablesRecursively = (text: string): string => {
-  for (const m of text.matchAll(variableRE)) {
-    const name = m.groups.name.toLowerCase()
-    text = name in env ? replaceVariablesRecursively(text.replace(m[0], env[name])) : text.replace(m[0], '')
-  }
-  return text
+type ReplaceContext = {
+  map: Map<string, string>
+  replaced?: true
+  text: string
 }
 
-const env = {} as Record<string, string>
-for (const name in process.env)
-  env[name.toLowerCase()] = process.env[name]
+export const applyEnvironmentVariables = (text: string): string => {
+  const { env } = process
+  const map = new Map<string, string>()
+  for (const name in env)
+    map.set(name.toUpperCase(), env[name])
+  const ctx: ReplaceContext = { map, text }
+  do {
+    replace(ctx)
+  } while (ctx.replaced)
+  return ctx.text
+}
 
-const variableRE = /\$\{(?<name>\w+)\}/g
+const replace = (ctx: ReplaceContext): void => {
+  delete ctx.replaced
+  for (const matched of ctx.text.matchAll(variableRE)) {
+    const name = matched.groups.name.toUpperCase()
+    const value = ctx.map.get(name) ?? ''
+    ctx.replaced ??= true
+    ctx.text = ctx.text.replace(matched[0], value)
+  }
+}
+
+const variableRE = /\$\{(?<name>[_\w]+)\}/g

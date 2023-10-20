@@ -34,10 +34,10 @@ export const isRedisStreamItemSpeech = (value: unknown): value is RedisStreamIte
 
 export const selectBodyOfLog = (item: RedisStreamItem<Log>) => item.message.log
 
-const speechKeyTypes = [
+const speechKeyTypes: Readonly<SpeechKeyType[]> = [
   'body',
   'date',
   'hash',
   'host',
   'time',
-] as SpeechKeyType[]
+] as const

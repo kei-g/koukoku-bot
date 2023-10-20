@@ -6,9 +6,9 @@
     "downlevelIteration": true,
     "emitBOM": false,
     "emitDeclarationOnly": true,
-    "emitDecoratorMetadata": false,
+    "emitDecoratorMetadata": true,
     "esModuleInterop": true,
-    "experimentalDecorators": false,
+    "experimentalDecorators": true,
     "lib": [
       "ES2021.String",
     ],
