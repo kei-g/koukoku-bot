@@ -8,10 +8,12 @@ const catchAndExit = (reason?: unknown) => {
 
 const demote = (): void => {
   const { SUDO_GID, SUDO_UID } = process.env
-  if (SUDO_GID)
-    process.setgid(parseInt(SUDO_GID))
-  if (SUDO_UID)
-    process.setuid(parseInt(SUDO_UID))
+  const gid = parseInt(SUDO_GID)
+  if (!Number.isNaN(gid))
+    process.setgid(gid)
+  const uid = parseInt(SUDO_UID)
+  if (!Number.isNaN(uid))
+    process.setuid(uid)
 }
 
 const getUserEntryAsync = async (name: string): Promise<string[]> => {
