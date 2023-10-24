@@ -62,12 +62,13 @@ export class Web implements AsyncDisposable {
 
   async broadcastAsync(item: RedisStreamItem<Log | Speech>): Promise<void> {
     if (item) {
-      const json = JSON.stringify(item)
-      const data = Buffer.from(json)
+      const context = {} as { data: Buffer }
       const jobs = [] as Promise<Error | undefined>[]
       for (const client of this.webClients)
-        if (client.readyState === WebSocketClient.OPEN)
-          jobs.push(new Promise((resolve: Action<Error | undefined>) => client.send(data, resolve)))
+        if (client.readyState === WebSocketClient.OPEN) {
+          context.data ??= Buffer.from(JSON.stringify(item))
+          jobs.push(new Promise((resolve: Action<Error | undefined>) => client.send(context.data, resolve)))
+        }
         else
           this.enqueuePending(client, item)
       await Promise.all(jobs)
