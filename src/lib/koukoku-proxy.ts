@@ -2,7 +2,7 @@ import { ProxyResponse, receiveAsJsonAsync } from '..'
 import { request as createRequest } from 'https'
 
 export namespace KoukokuProxy {
-  export const pingAsync = (): Promise<Error | ProxyResponse | string> => {
+  export const pingAsync = (): Promise<Error | ProxyResponse> => {
     const { PROXY_HOST } = process.env
     const request = createRequest(
       {
@@ -19,7 +19,7 @@ export namespace KoukokuProxy {
     return receiveAsJsonAsync<ProxyResponse>(request, Buffer.from(''))
   }
 
-  export const sendAsync = (text: string): Promise<Error | ProxyResponse | string> => {
+  export const sendAsync = (text: string): Promise<Error | ProxyResponse> => {
     const data = Buffer.from(text)
     const { HOST, PROXY_HOST, PROXY_TOKEN } = process.env
     const request = createRequest(

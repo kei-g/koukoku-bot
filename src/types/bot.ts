@@ -20,7 +20,7 @@ export interface BotInterface {
    *
    * @param target
    */
-  observe(target: EventEmitter): void
+  observe(target: EventEmitter): Promise<Buffer>
 
   /**
    *

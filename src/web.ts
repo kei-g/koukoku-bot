@@ -130,12 +130,11 @@ export class Web implements AsyncDisposable {
 
   private async handlePostRequest(request: IncomingMessage, response: ServerResponse): Promise<void> {
     if (request.headers['content-type'] === 'application/json' && request.url === '/post') {
-      this.bot.observe(request)
-      const ok = Buffer.from(JSON.stringify({ accepted: true }))
+      const data = await this.bot.observe(request)
       response.statusCode = 202
-      response.setHeader('Content-Length', ok.byteLength)
+      response.setHeader('Content-Length', data.byteLength)
       response.setHeader('Content-Type', 'application/json')
-      response.write(ok)
+      response.write(data)
     }
     else
       response.statusCode = 403

@@ -10,6 +10,22 @@ export type ProxyResult = {
   result: boolean
 }
 
-export const isProxyError = (response: ProxyResponse): response is ProxyError => 'error' in response && 'message' in response.error && typeof response.error.message === 'string'
+export const describeProxyResponse = (value: Error | ProxyResponse) => JSON.stringify(
+  isProxyError(value)
+    ? { error: value.error.message }
+    : (
+      isProxyResult(value)
+        ? { accepted: value.result }
+        : { error: value.message }
+    )
+)
 
-export const isProxyResult = (response: ProxyResponse): response is ProxyResult => 'result' in response && typeof response.result === 'boolean'
+export const isProxyError = (value: unknown): value is ProxyError => {
+  const response = value as ProxyError
+  return typeof value === 'object' && typeof response.error === 'object' && typeof response.error.message === 'string'
+}
+
+export const isProxyResult = (value: unknown): value is ProxyResult => {
+  const response = value as ProxyResult
+  return typeof value === 'object' && typeof response.result === 'boolean'
+}

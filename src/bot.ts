@@ -15,11 +15,13 @@ import {
   PeriodicSchedule,
   PeriodicScheduler,
   PhiLLM,
+  ProxyResponse,
   RedisStreamItem,
   SJIS,
   Speech,
   Web,
   compileIgnorePattern,
+  describeProxyResponse,
   isDeepLError,
   isDeepLSuccess,
   isGitHubResponse,
@@ -376,17 +378,23 @@ export class Bot implements AsyncDisposable, BotInterface {
     await send(this.recent)
   }
 
-  observe(target: EventEmitter): void {
+  observe(target: EventEmitter): Promise<Buffer> {
     const list = [] as Buffer[]
     target.on('data', list.push.bind(list))
-    target.on(
-      'end',
-      async () => {
-        const data = Buffer.concat(list).toString()
-        const json = JSON.parse(data) as { msg: string, token: string }
-        if (json?.token === process.env.PROXY_TOKEN)
-          await this.sendAsync(json?.msg?.trim())
-      }
+    return new Promise(
+      (resolve: Action<Buffer>) => target.on(
+        'end',
+        async () => {
+          const data = Buffer.concat(list).toString()
+          const json = JSON.parse(data) as { msg: string, token: string }
+          if (json?.token === process.env.PROXY_TOKEN) {
+            const response = await this.sendAsync(json?.msg?.trim())
+            resolve(Buffer.from(describeProxyResponse(response)))
+          }
+          else
+            resolve(Buffer.from(JSON.stringify({ error: 'bad token' })))
+        }
+      )
     )
   }
 
@@ -446,9 +454,9 @@ export class Bot implements AsyncDisposable, BotInterface {
     await this.sendAsync(text)
   }
 
-  private async sendAsync(text: string): Promise<void> {
+  private async sendAsync(text: string): Promise<Error | ProxyResponse> {
     process.stdout.write(text + '\n')
-    await KoukokuProxy.sendAsync(text)
+    return await KoukokuProxy.sendAsync(text)
   }
 
   private shouldBeAccepted(matched: RegExpMatchArray): boolean {
