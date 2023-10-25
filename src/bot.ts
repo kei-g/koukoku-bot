@@ -72,6 +72,13 @@ export class Bot implements AsyncDisposable, BotInterface {
     this.interval = setInterval(KoukokuProxy.pingAsync, parseIntOr(process.env.PROXY_PING_INTERVAL, 120000))
     this.db = redis.createClient({ pingInterval: 15000, url: process.env.REDIS_URL })
     this.scheduler.register(this.announceTimeSignalAsync.bind(this), 'minutely')
+    this.scheduler.register(this.makeSpeech.bind(this), 'minutely', `[Bot] {now}の定期演説
+
+現在、本 Bot を含め、おそらく 2 台の Bot が稼働しています。
+各 Bot は利用者に情報を提供する機能を有しており、所定の様式に従った発言に反応します。
+本 Bot の機能および様式の詳細について知りたい場合は ヘルプ と発言してください。
+
+なお、この演説は試験的に毎日 12 時 34 分と 21 時 34 分に実施しています。`, [34], [12, 21])
     this.web = new Web(this)
   }
 
@@ -117,15 +124,8 @@ export class Bot implements AsyncDisposable, BotInterface {
     if (schedule.minute === 1) {
       const signal = this.timeSignals.at(0)
       if (!(schedule.time - schedule.delta - 65000000000n < signal?.hrtime)) { // unless within the latest 65seconds
-        const now = new Date()
-        const [month, date, hour, minute, second] = [
-          now.getMonth() + 1,
-          now.getDate(),
-          now.getHours(),
-          now.getMinutes(),
-          now.getSeconds(),
-        ].map((value: number) => ('0' + value.toString()).slice(-2))
-        await this.sendAsync(`[時報] ${now.getFullYear()} 年 ${month} 月 ${date} 日 ${hour} 時 ${minute} 分 ${second} 秒です (代理)`)
+        const now = convertDateToString(new Date())
+        await this.sendAsync(`[時報] ${now}です (代理)`)
       }
     }
   }
@@ -381,6 +381,17 @@ export class Bot implements AsyncDisposable, BotInterface {
         : contents.push(composeLogFromSpeech(last, item))
     const time = Date.now().toString(16).slice(2, -2)
     await this.createSpeechAsync(contents.slice(0, Math.min(parseIntOr(count, 10), 30)).concat('----', `[Bot] ${time}`).join('\n'))
+  }
+
+  private async makeSpeech(schedule: PeriodicSchedule, content: string, minutes: number[], hours: number[]): Promise<void> {
+    if (minutes.includes(schedule.minute)) {
+      const date = new Date(Number(schedule.time / 1000000n))
+      const hour = date.getHours()
+      if (hours.includes(hour)) {
+        const now = convertDateToString(new Date())
+        await this.createSpeechAsync(content.replaceAll('{now}', now))
+      }
+    }
   }
 
   async notifyWebClient(send: (data: (RedisStreamItem<Log> | RedisStreamItem<Speech>)[]) => Promise<void>): Promise<void> {
@@ -674,6 +685,17 @@ const composeLogFromSpeech = (last: { host?: string, message?: string }, item: R
   const matched = item.message.date.match(/(?<month>\d+)\s月\s(?<day>\d+)\s日/)
   const { month, day } = matched.groups
   return `${month}/${day} ${item.message.time}:** ${lines[0]}${suffix} ${current.host}`
+}
+
+const convertDateToString = (d: Date): string => {
+  const [month, date, hour, minute, second] = [
+    d.getMonth() + 1,
+    d.getDate(),
+    d.getHours(),
+    d.getMinutes(),
+    d.getSeconds(),
+  ].map((value: number) => ('0' + value.toString()).slice(-2))
+  return `${d.getFullYear()} 年 ${month} 月 ${date} 日 ${hour} 時 ${minute} 分 ${second} 秒`
 }
 
 const createMap = (obj: { [key: string]: string }) => {
