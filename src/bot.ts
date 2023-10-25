@@ -63,7 +63,7 @@ export class Bot implements AsyncDisposable, BotInterface {
   private readonly received = [] as Buffer[]
   private readonly recent = [] as (RedisStreamItem<Log> | RedisStreamItem<Speech>)[]
   private readonly scheduler = new PeriodicScheduler()
-  private readonly speechesSet = new Set<GitHubSpeech>()
+  private readonly speechesSet = new Set<GitHubSpeechWithTimer>()
   private readonly timeSignals = [] as TimeSignal[]
   private readonly userKeywords = new Set<string>()
   private readonly web: Web
@@ -201,8 +201,15 @@ export class Bot implements AsyncDisposable, BotInterface {
       const { id, rawUrl } = response
       const speech = {
         content: text,
-        expiresAt: new Date(now.getTime() + 300000),
+        expiresAt: new Date(now.getTime() + 3e6),
         id,
+        timer: setTimeout(
+          async () => {
+            this.speechesSet.delete(speech)
+            await GitHub.deleteGistAsync(id)
+          },
+          3e6
+        ),
         url: rawUrl,
       }
       this.speechesSet.add(speech)
@@ -590,8 +597,12 @@ export class Bot implements AsyncDisposable, BotInterface {
     const jobs = [] as Promise<number | void>[]
     jobs.push(this.web[Symbol.asyncDispose]())
     console.log('deleting gists...')
-    for (const speech of this.speechesSet)
+    const speeches = [...this.speechesSet]
+    this.speechesSet.clear()
+    for (const speech of speeches) {
+      clearTimeout(speech.timer)
       jobs.push(GitHub.deleteGistAsync(speech.id))
+    }
     console.log('disconnecting from database...')
     jobs.push(this.db.disconnect())
     console.log('disconnecting from telnet server...')
@@ -605,6 +616,10 @@ export class Bot implements AsyncDisposable, BotInterface {
 type CommandHandler = {
   handle: (matched: RegExpMatchArray) => Promise<void>
   regexp: RegExp
+}
+
+type GitHubSpeechWithTimer = GitHubSpeech & {
+  timer: NodeJS.Timeout
 }
 
 type MatchedItem = {

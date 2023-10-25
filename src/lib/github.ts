@@ -10,7 +10,6 @@ export namespace GitHub {
           headers: {
             Accept: 'application/vnd.github+json',
             Authorization: `Bearer ${process.env.GITHUB_TOKEN}`,
-            'Content-Type': 'application/json',
             'User-agent': `Node.js ${process.version}`,
             'X-GitHub-Api-Version': '2022-11-28',
           },
@@ -25,26 +24,23 @@ export namespace GitHub {
     }
   )
 
-  export const uploadToGistAsync = async (name: string, text: string, description?: string): Promise<Error | GitHubResponse | string> => {
+  export const uploadToGistAsync = async (name: string, content: string, description?: string): Promise<Error | GitHubResponse | string> => {
     const obj = {
-      description: '',
-      files: {
-      } as Record<string, { content: string }>,
+      description: description ?? '',
+      files: {} as Record<string, { content: string }>,
       public: false,
     }
-    if (description)
-      obj.description = description
-    const fileName = name + '.txt'
-    obj.files[fileName] = { content: text }
+    const fileName = `${name}.txt`
+    obj.files[fileName] = { content }
     console.log(obj)
     const json = JSON.stringify(obj)
-    const content = Buffer.from(json)
+    const data = Buffer.from(json)
     const request = createRequest(
       {
         headers: {
           Accept: 'application/vnd.github+json',
           Authorization: `Bearer ${process.env.GITHUB_TOKEN}`,
-          'Content-Length': content.byteLength,
+          'Content-Length': data.byteLength,
           'Content-Type': 'application/json',
           'User-agent': `Node.js ${process.version}`,
           'X-GitHub-Api-Version': '2022-11-28',
@@ -55,11 +51,11 @@ export namespace GitHub {
         protocol: 'https:',
       }
     )
-    const response = await receiveAsJsonAsync<GitHubResponse>(request, content)
-    console.log({ response })
+    const response = await receiveAsJsonAsync<GitHubResponse>(request, data)
+    console.log({ before: response })
     if (isGitHubRawResponse(response))
       response.rawUrl = response.files[fileName].raw_url
-    console.log({ response })
+    console.log({ after: response })
     return response
   }
 }
