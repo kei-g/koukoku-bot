@@ -322,7 +322,7 @@ export class Bot implements AsyncDisposable, BotInterface {
     const command = handlers.find(
       (a: CommandHandler) => !!(found.result ??= text.match(a.regexp))
     )
-    await (command ? command.handle.bind(this)(found.result) : this.testUserKeywordsAsync(matched))
+    await (command ? command.handle.bind(this)(found.result, matched[0]) : this.testUserKeywordsAsync(matched))
   }
 
   private async handleTallyCommandAsync(matched: RegExpMatchArray): Promise<void> {
@@ -368,17 +368,19 @@ export class Bot implements AsyncDisposable, BotInterface {
     }
   }
 
-  private async locateLogsAsync(matched: RegExpMatchArray): Promise<void> {
+  private async locateLogsAsync(matched: RegExpMatchArray, rawMessage: string): Promise<void> {
     const { command, count } = matched.groups
     if (command)
       return await this.describeLogAsync(matched)
     const contents = [] as string[]
     const last = {} as { host?: string, message?: string }
+    const filter = except(rawMessage)
     for (const item of this.recent)
       isRedisStreamItemLog(item)
-        ? contents.push(...composeLogs(last, item))
+        ? contents.push(...composeLogs(last, item, filter))
         : contents.push(composeLogFromSpeech(last, item))
-    await this.createSpeechAsync(contents.slice(0, Math.min(parseIntOr(count, 10), 30)).join('\n'))
+    const time = Date.now().toString(16).slice(2, -2)
+    await this.createSpeechAsync(contents.slice(0, Math.min(parseIntOr(count, 10), 30)).concat('----', `[Bot] ${time}`).join('\n'))
   }
 
   async notifyWebClient(send: (data: (RedisStreamItem<Log> | RedisStreamItem<Speech>)[]) => Promise<void>): Promise<void> {
@@ -614,7 +616,7 @@ export class Bot implements AsyncDisposable, BotInterface {
 }
 
 type CommandHandler = {
-  handle: (matched: RegExpMatchArray) => Promise<void>
+  handle: (matched: RegExpMatchArray, rawMessage?: string) => Promise<void>
   regexp: RegExp
 }
 
@@ -640,22 +642,24 @@ type TimeSignal = {
   time: Date
 }
 
-function* composeLogs(last: { host?: string, message?: string }, item: RedisStreamItem<Log>) {
-  for (const line of item.message.log.split(/\r?\n/))
-    for (const matched of [...line.matchAll(Bot.MessageRE)].filter(isNotBot).filter(isNotTimeSignal)) {
-      const current = {
-        host: matched.groups.host.replaceAll(/(\*+[-.]?)+/g, ''),
-        message: matched.groups.msg.trim(),
-      }
-      current.host === last.host ? current.host = '〃' : last.host = current.host
-      current.message === last.message ? current.message = '〃' : last.message = current.message
-      yield [
-        matched.groups.date,
-        matched.groups.time,
-        current.message,
-        current.host,
-      ].join(' ')
+const applyPredicates = <T>(source: T[], ...predicates: Predicate<T>[]): T[] => predicates.reduce((matched: T[], predicate: Predicate<T>) => matched.filter(predicate), source)
+
+function* composeLogs(last: { host?: string, message?: string }, item: RedisStreamItem<Log>, ...filters: Predicate<RegExpMatchArray>[]) {
+  const source = [...item.message.log.replaceAll(/\r?\n/g, '').matchAll(Bot.MessageRE)]
+  for (const matched of applyPredicates(source, isNotBot, isNotTimeSignal, ...filters)) {
+    const current = {
+      host: matched.groups.host.replaceAll(/(\*+[-.]?)+/g, ''),
+      message: matched.groups.msg.trim(),
     }
+    current.host === last.host ? current.host = '〃' : last.host = current.host
+    current.message === last.message ? current.message = '〃' : last.message = current.message
+    yield [
+      matched.groups.date,
+      matched.groups.time,
+      current.message,
+      current.host,
+    ].join(' ')
+  }
 }
 
 const composeLogFromSpeech = (last: { host?: string, message?: string }, item: RedisStreamItem<Speech>): string => {
@@ -684,6 +688,8 @@ const createMap = (obj: { [key: string]: string }) => {
 const descending = (lhs: number, rhs: number) => rhs - lhs
 
 const descendingByFrequency = (lhs: [string, RegExpMatchArray[]], rhs: [string, RegExpMatchArray[]]) => rhs[1].length - lhs[1].length
+
+const except = (text: string): Predicate<RegExpMatchArray> => (matched: RegExpMatchArray) => !(matched[0] === text)
 
 const isNotBot = (matched: RegExpMatchArray) => !matched.groups.msg.startsWith('[Bot] ')
 
