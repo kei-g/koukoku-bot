@@ -519,8 +519,8 @@ export class Bot implements AsyncDisposable, BotInterface {
     const list = [] as string[]
     for (const x of [{ name: '今', week: weeks[0] }, { name: '先', week: weeks[1] }]) {
       const hosts = weekly.get(x.week)
-      list.push(`[Bot] ${x.name}週の逆引きホスト名で区別可能なクライアントの数は ${hosts.size} で、発言回数の多かったものは次の通りです`)
-      list.push(...[...hosts].sort(descendingByFrequency).map(e => `[Bot] ${e[0].replaceAll(/(\*+[-.]?)+/g, '')} ${e[1].length} 回`).slice(0, 5))
+      list.push(`${x.name}週の逆引きホスト名で区別可能なクライアントの数は ${hosts.size} で、発言回数の多かったものは次の通りです`)
+      list.push(...[...hosts].sort(descendingByFrequency).map(e => `${e[0].replaceAll(/(\*+[-.]?)+/g, '')} ${e[1].length} 回`).slice(0, 5))
     }
     return list
   }
