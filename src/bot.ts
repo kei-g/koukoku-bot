@@ -73,10 +73,14 @@ export class Bot implements AsyncDisposable, BotInterface {
     this.db = redis.createClient({ pingInterval: 15000, url: process.env.REDIS_URL })
     this.scheduler.register(this.announceTimeSignalAsync.bind(this), 'minutely')
     this.scheduler.register(this.makeSpeech.bind(this), 'minutely', `[Bot] {now}の定期演説
+最終更新日時 令和 5 年 10 月 26 日 19 時 04 分
 
 現在、本 Bot を含め、おそらく 2 台の Bot が稼働しています。
-各 Bot は利用者に情報を提供する機能を有しており、所定の様式に従った発言に反応します。
-本 Bot の機能および様式の詳細について知りたい場合は ヘルプ と発言してください。
+各 Bot は利用者に情報を提供する機能を有しており、
+各々の所定の様式に従った発言に反応します。
+本 Bot の機能および様式について知りたい場合は、
+ヘルプ
+と発言することで情報を得ることができます。
 
 なお、この演説は試験的に毎日 12 時 34 分と 21 時 34 分に実施しています。`, [34], [12, 21])
     this.web = new Web(this)
