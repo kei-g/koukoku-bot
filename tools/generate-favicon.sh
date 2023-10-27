@@ -2,7 +2,7 @@
 
 set -e
 
-srcfile=images/favicon.png
+srcfile=src/assets/images/favicon.png
 
 destdir=assets
 for size in 192 512; do
