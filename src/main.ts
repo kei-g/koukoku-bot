@@ -29,7 +29,9 @@ const main = async () => {
     env.HOME = entry?.at(-2)
     env.SHELL = entry?.at(-1)
   }
+  const introduction = await readFile('templates/introduction/periodic.txt')
   const server = {} as KoukokuServer
+  server.introduction = introduction.toString()
   server.port = parseInt(process.argv.at(3))
   if (isNaN(server.port))
     delete server.port

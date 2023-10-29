@@ -72,20 +72,7 @@ export class Bot implements AsyncDisposable, BotInterface {
     this.interval = setInterval(KoukokuProxy.pingAsync, parseIntOr(process.env.PROXY_PING_INTERVAL, 120000))
     this.db = redis.createClient({ pingInterval: 15000, url: process.env.REDIS_URL })
     this.scheduler.register(this.announceTimeSignalAsync.bind(this), 'minutely')
-    this.scheduler.register(this.makeSpeech.bind(this), 'minutely', `[Bot] {now}の定期演説
-
-現在、本 Bot を含め、おそらく 2 台の Bot が稼働しています。
-
-各 Bot は利用者に情報を提供する機能を有しており、
-各々所定の様式に従った発言に反応します。
-
-本 Bot の機能および様式について知りたい場合は、
-ヘルプ
-と発言することで情報を得ることができます。
-
-なお、この演説は試験的に毎日 12 時 34 分と 21 時 34 分に実施しています。
-
-最終更新日時 令和 5 年 10 月 26 日 21 時 44 分`, [34], [12, 21])
+    this.scheduler.register(this.makeSpeech.bind(this), 'minutely', server.introduction, [34], [12, 21])
     this.web = new Web(this)
   }
 
