@@ -28,7 +28,7 @@ class Client {
     if (li) {
       removeAllChildren(li)
       for (const text of item.message.body.split(/\r?\n/)) {
-        li.append(document.createTextNode(text))
+        li.append(document.createTextNode(text.trim()))
         li.append(document.createElement('br'))
       }
     }
@@ -36,7 +36,7 @@ class Client {
       const li = document.createElement('li')
       li.setAttribute('id', item.id)
       for (const text of item.message.body.split(/\r?\n/)) {
-        li.append(document.createTextNode(text))
+        li.append(document.createTextNode(text.trim()))
         li.append(document.createElement('br'))
       }
       this.#messages.prepend(li)
