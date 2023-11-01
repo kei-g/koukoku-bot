@@ -678,7 +678,8 @@ const composeLogFromSpeech = (last: { host?: string, message?: string }, item: R
   delete last.message
   const matched = item.message.date.match(/(?<month>\d+)\s月\s(?<day>\d+)\s日/)
   const { month, day } = matched.groups
-  return `${month}/${day} ${item.message.time}:** ${lines[0]}${suffix} ${current.host}`
+  const date = [month, day].map((value: string) => ('0' + value).slice(-2)).join('/')
+  return `${date} ${item.message.time}:** ${lines[0]}${suffix} ${current.host}`
 }
 
 const convertDateToString = (d: Date): string => {
