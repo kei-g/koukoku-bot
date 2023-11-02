@@ -1,5 +1,5 @@
 import { IncomingMessage } from 'http'
-import { GitHubResponse, isGitHubRawResponse, receiveAsJsonAsync } from '..'
+import { GitHubResponse, bindToReadAsJSON, isGitHubRawResponse } from '..'
 import { request as createRequest } from 'https'
 
 export namespace GitHub {
@@ -51,7 +51,11 @@ export namespace GitHub {
         protocol: 'https:',
       }
     )
-    const response = await receiveAsJsonAsync<GitHubResponse>(request, data)
+    const readAsJSON = bindToReadAsJSON<GitHubResponse>(request)
+    process.stdout.write(`send '\x1b[32m${json}\x1b[m' to ${request.host}${request.path}\n`)
+    request.write(data)
+    request.end()
+    const response = await readAsJSON()
     console.log({ before: response })
     if (isGitHubRawResponse(response))
       response.rawUrl = response.files[fileName].raw_url

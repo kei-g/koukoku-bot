@@ -1,4 +1,4 @@
-import { DeepLResult, receiveAsJsonAsync } from '..'
+import { DeepLResult, bindToReadAsJSON } from '..'
 import { request as createRequest } from 'https'
 
 export namespace DeepL {
@@ -97,7 +97,12 @@ export namespace DeepL {
   }
 
   export const translateAsync = async (text: string, lang?: string): Promise<DeepLResult | Error> => {
-    const content = Buffer.from(JSON.stringify({ text: [text], target_lang: lang ?? (mayBeAssumedAsEnglish(text) ? 'JA' : 'EN') }))
+    const obj = {
+      target_lang: lang ?? (mayBeAssumedAsEnglish(text) ? 'JA' : 'EN'),
+      text: [text],
+    }
+    const json = JSON.stringify(obj)
+    const content = Buffer.from(json)
     const request = createRequest(
       {
         headers: {
@@ -112,6 +117,10 @@ export namespace DeepL {
         protocol: 'https:',
       }
     )
-    return await receiveAsJsonAsync(request, content)
+    const readAsJSON = bindToReadAsJSON<DeepLResult>(request)
+    process.stdout.write(`send '\x1b[32m${json}\x1b[m' to ${request.host}${request.path}\n`)
+    request.write(content)
+    request.end()
+    return await readAsJSON()
   }
 }

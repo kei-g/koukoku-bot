@@ -7,7 +7,21 @@ class UnexpectedContentTypeError extends Error {
   }
 }
 
-const concatenateBuffers = <T>(resolve: (value: Error | T) => void, response: IncomingMessage) => {
+export const bindToReadAsJSON = <T>(request: ClientRequest) => {
+  const job = new Promise(
+    (resolve: Action<Error | T>) => {
+      request.on('error', resolve)
+      request.on('response', bind1st(resolve, concatenateBuffers))
+    }
+  )
+  return async () => {
+    const response = await job
+    await debug(request.host, response)
+    return response
+  }
+}
+
+const concatenateBuffers = <T>(resolve: Action<Error | T>, response: IncomingMessage) => {
   const contentType = response.headers['content-type']
   const list = [] as Buffer[]
   response.on('data', list.push.bind(list))
@@ -32,21 +46,6 @@ const debug = async <T>(host: string, value: Error | T): Promise<void> => {
     await writeAsync(`[${host}] `)
     console.dir(value, { colors: true, depth: null, maxArrayLength: null })
   }
-}
-
-export const receiveAsJsonAsync = async <T>(request: ClientRequest, content: Buffer): Promise<Error | T> => {
-  const task = new Promise(
-    (resolve: (value: Error | T) => void) => {
-      request.on('error', resolve)
-      request.on('response', bind1st(resolve, concatenateBuffers))
-    }
-  )
-  await writeAsync(`send '\x1b[32m${content.toString()}\x1b[m' to ${request.host}${request.path}\n`)
-  request.write(content)
-  request.end()
-  const response = await task
-  await debug(request.host, response)
-  return response
 }
 
 const writeAsync = (buffer: Uint8Array | string) => new Promise(
