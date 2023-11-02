@@ -175,7 +175,7 @@ export class Bot implements AsyncDisposable, BotInterface {
     this.client = tls.connect(port, serverName, opts, this.connected.bind(this))
     this.client.on('data', this.acceptKoukoku.bind(this))
     this.client.on('error', (error: Error) => console.error({ error }))
-    this.client.on('session', this.acceptSession.bind(this))
+    this.client.once('session', this.acceptSession.bind(this))
     this.client.setKeepAlive(true, 15000)
     this.client.setNoDelay(true)
   }
