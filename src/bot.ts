@@ -107,7 +107,7 @@ export class Bot implements AsyncDisposable, BotInterface {
     }
     else
       this.received.push(Buffer.from(data.toString().replaceAll('\x07', '')))
-    this.idleTimerId = setTimeout(this.onIdle.bind(this), 1000)
+    this.idleTimerId = setTimeout(this.onIdle.bind(this), 125)
   }
 
   private async acceptSession(data: Buffer): Promise<void> {
