@@ -27,7 +27,7 @@ export class PeriodicScheduler implements Disposable {
   readonly #observers = new Map<number, PeriodicObserver<unknown[]>>()
 
   async #dispatch(item: PeriodicSchedule): Promise<void> {
-    const selector = [isMinutely, alwaysTrue][+item.isHourly]
+    const selector = [isMinutely, alwaysTrue][+(item.minute === 0)]
     console.log(item)
     for await (const observer of this.#observers.values())
       if (selector(observer))
@@ -49,8 +49,7 @@ export class PeriodicScheduler implements Disposable {
     const now = hrtime()
     const { delta, minute, time } = indicator
     const behind = now - (time - indicator.delta)
-    const isHourly = minute === 0
-    const item = { behind, delta, isHourly, minute, time }
+    const item = { behind, delta, minute, time }
     this.#id = callMeAtNextMinute(this.#bound, indicator)
     queueMicrotask(this.#dispatch.bind(this, item))
   }
