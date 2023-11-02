@@ -372,7 +372,7 @@ export class Bot implements AsyncDisposable, BotInterface {
     for (const item of this.recent)
       isRedisStreamItemLog(item)
         ? contents.push(...composeLogs(last, item, filter))
-        : contents.push(composeLogFromSpeech(last, item))
+        : contents.push(...composeLogsFromSpeech(last, item))
     const time = Date.now().toString(16).slice(2, -2)
     await this.createSpeechAsync(contents.slice(0, Math.min(parseIntOr(count, 10), 30)).concat('----', `[Bot] ${time}`).join('\n'))
   }
@@ -667,19 +667,21 @@ function* composeLogs(last: { host?: string, message?: string }, item: RedisStre
   }
 }
 
-const composeLogFromSpeech = (last: { host?: string, message?: string }, item: RedisStreamItem<Speech>): string => {
+function* composeLogsFromSpeech(last: { host?: string, message?: string }, item: RedisStreamItem<Speech>) {
   const lines = item.message.body.split(/\r?\n/)
-  const { length } = lines
-  const suffix = [` ${length - 1} 行省略`, ''][+(length === 1)]
-  const current = {
-    host: item.message.host.replaceAll(/(\*+[-.]?)+/g, ''),
+  if (!lines.at(0)?.startsWith('[Bot] ')) {
+    const { length } = lines
+    const suffix = [` ${length - 1} 行省略`, ''][+(length === 1)]
+    const current = {
+      host: item.message.host.replaceAll(/(\*+[-.]?)+/g, ''),
+    }
+    current.host === last.host ? current.host = '〃' : last.host = current.host
+    delete last.message
+    const matched = item.message.date.match(/(?<month>\d+)\s月\s(?<day>\d+)\s日/)
+    const { month, day } = matched.groups
+    const date = [month, day].map((value: string) => ('0' + value).slice(-2)).join('/')
+    yield `${date} ${item.message.time}:** ${lines[0]}${suffix} ${current.host}`
   }
-  current.host === last.host ? current.host = '〃' : last.host = current.host
-  delete last.message
-  const matched = item.message.date.match(/(?<month>\d+)\s月\s(?<day>\d+)\s日/)
-  const { month, day } = matched.groups
-  const date = [month, day].map((value: string) => ('0' + value).slice(-2)).join('/')
-  return `${date} ${item.message.time}:** ${lines[0]}${suffix} ${current.host}`
 }
 
 const convertDateToString = (d: Date): string => {
