@@ -1,5 +1,5 @@
+import { Action, bind1st } from '..'
 import { ClientRequest, IncomingMessage } from 'http'
-import { bind1st } from '..'
 
 class UnexpectedContentTypeError extends Error {
   constructor(readonly contentType: string, readonly text: string) {
@@ -25,11 +25,13 @@ const concatenateBuffers = <T>(resolve: (value: Error | T) => void, response: In
   response.on('error', resolve)
 }
 
-const debug = <T>(host: string, value: Error | T): void => {
+const debug = async <T>(host: string, value: Error | T): Promise<void> => {
   if (value instanceof Error)
-    process.stderr.write(`[${host}] '\x1b[31m${value.message}\x1b[m'\n`)
-  else if (typeof value === 'object')
-    process.stdout.write(`[${host}] ${JSON.stringify(value)}\n`)
+    await writeAsync(`[${host}] '\x1b[31m${value.message}\x1b[m'\n`)
+  else if (typeof value === 'object') {
+    await writeAsync(`[${host}] `)
+    console.dir(value, { colors: true, depth: null, maxArrayLength: null })
+  }
 }
 
 export const receiveAsJsonAsync = async <T>(request: ClientRequest, content: Buffer): Promise<Error | T> => {
@@ -39,10 +41,14 @@ export const receiveAsJsonAsync = async <T>(request: ClientRequest, content: Buf
       request.on('response', bind1st(resolve, concatenateBuffers))
     }
   )
-  process.stdout.write(`send '\x1b[32m${content.toString()}\x1b[m' to ${request.host}${request.path}\n`)
+  await writeAsync(`send '\x1b[32m${content.toString()}\x1b[m' to ${request.host}${request.path}\n`)
   request.write(content)
   request.end()
   const response = await task
-  debug(request.host, response)
+  await debug(request.host, response)
   return response
 }
+
+const writeAsync = (buffer: Uint8Array | string) => new Promise(
+  (resolve: Action<Error | void>) => process.stdout.write(buffer, resolve)
+)
