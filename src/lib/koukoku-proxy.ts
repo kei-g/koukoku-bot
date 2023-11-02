@@ -1,4 +1,4 @@
-import { ProxyResponse, receiveAsJsonAsync } from '..'
+import { ProxyResponse, bindToReadAsJSON } from '..'
 import { request as createRequest } from 'https'
 
 export namespace KoukokuProxy {
@@ -16,7 +16,10 @@ export namespace KoukokuProxy {
         protocol: 'https:',
       }
     )
-    return receiveAsJsonAsync<ProxyResponse>(request, Buffer.from(''))
+    const readAsJSON = bindToReadAsJSON<ProxyResponse>(request)
+    request.write(Buffer.from(''))
+    request.end()
+    return readAsJSON()
   }
 
   export const sendAsync = (text: string): Promise<Error | ProxyResponse> => {
@@ -36,6 +39,10 @@ export namespace KoukokuProxy {
         protocol: 'https:',
       }
     )
-    return receiveAsJsonAsync<ProxyResponse>(request, data)
+    const readAsJSON = bindToReadAsJSON<ProxyResponse>(request)
+    process.stdout.write(`send '\x1b[32m${text}\x1b[m' to ${request.host}${request.path}\n`)
+    request.write(data)
+    request.end()
+    return readAsJSON()
   }
 }
