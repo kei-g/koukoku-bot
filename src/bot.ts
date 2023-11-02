@@ -431,7 +431,11 @@ export class Bot implements AsyncDisposable, BotInterface {
         time,
       }
       const job = this.db.xAdd(Bot.LogKey, '*', message).then(
-        (id: string): void => this.updateRecent({ id, message })
+        async (id: string) => {
+          const item = { id, message }
+          this.updateRecent(item)
+          await this.web.broadcastAsync(item)
+        }
       )
       jobs.push(job)
       console.log(message)
