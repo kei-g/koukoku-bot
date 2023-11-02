@@ -25,6 +25,7 @@ import {
   isDeepLError,
   isDeepLSuccess,
   isGitHubResponse,
+  isIgnorePattern,
   isRedisStreamItemLog,
   shouldBeIgnored,
   suppress,
@@ -353,12 +354,13 @@ export class Bot implements AsyncDisposable, BotInterface {
 
   private async loadIgnorePatternsAsync(): Promise<void> {
     const data = await readFile('conf/ignore.json').catch(suppress)
-    if (data) {
+    if (Buffer.isBuffer(data)) {
       const text = data.toString()
-      const config = JSON.parse(text) as { ignorePatterns: IgnorePattern[] }
-      const patterns = config.ignorePatterns?.map(compileIgnorePattern)?.filter((pattern: IgnorePattern | undefined) => pattern !== undefined)
+      const { ignorePatterns } = JSON.parse(text)
+      const patterns = ignorePatterns?.map(compileIgnorePattern)?.filter(isIgnorePattern)
       this.ignorePatterns.splice(0)
-      patterns?.forEach((this.ignorePatterns.push as Action<IgnorePattern>).bind(this.ignorePatterns))
+      for (const pattern of patterns ?? [])
+        this.ignorePatterns.push(pattern)
     }
   }
 
