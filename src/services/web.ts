@@ -15,10 +15,11 @@ import {
   parseIntOr,
   suppress,
 } from '..'
+import { Duplex } from 'stream'
 import { EventEmitter } from 'events'
+import { Http2SecureServer, SecureServerOptions, createSecureServer } from 'http2'
 import { IncomingMessage, ServerResponse } from 'http'
 import { RawData, WebSocket as WebSocketClient, WebSocketServer } from 'ws'
-import { Server, ServerOptions, createServer as createSecureServer } from 'https'
 import { join as joinPath } from 'path'
 import { readFile, readdir } from 'fs/promises'
 
@@ -37,7 +38,7 @@ export class WebService implements Service {
   readonly #messages = new Array<string>()
   readonly #pending = new WeakMap<WebSocketClient, RedisStreamItem<Log | Speech>[]>()
   readonly #proxyService: KoukokuProxyService
-  readonly #server: Server
+  readonly #server: Http2SecureServer
   readonly #webSocket: WebSocketServer
 
   #acceptWebSocket(client: WebSocketClient): void {
@@ -154,6 +155,10 @@ export class WebService implements Service {
       response.statusCode = 403
   }
 
+  #handleUpgradeRequest(request: IncomingMessage, socket: Duplex, head: Buffer): void {
+    this.#webSocket.handleUpgrade(request, socket, head, this.#webSocket.emit.bind(this.#webSocket, 'connection'))
+  }
+
   async #loadAssets(): Promise<void> {
     for (const entry of await readdir('assets', { withFileTypes: true }))
       if (entry.isFile()) {
@@ -237,15 +242,16 @@ export class WebService implements Service {
     this.#proxyService = proxyService
     const cert = resolver.argument<Buffer | NodeJS.ErrnoException>(0)
     const key = resolver.argument<Buffer | NodeJS.ErrnoException>(1)
-    const opts = {} as ServerOptions
+    const opts = { allowHTTP1: true } as SecureServerOptions
     if (Buffer.isBuffer(cert))
       opts.cert = cert
     if (Buffer.isBuffer(key))
       opts.key = key
     this.#server = createSecureServer(opts)
     this.#server.on('request', this.#handleHttp2Request.bind(this))
+    this.#server.on('upgrade', this.#handleUpgradeRequest.bind(this))
     this.#server.listen(parseIntOr(process.env.PORT, undefined))
-    this.#webSocket = new WebSocketServer({ server: this.#server })
+    this.#webSocket = new WebSocketServer({ noServer: true })
     this.#webSocket.on('connection', this.#acceptWebSocket.bind(this))
   }
 
