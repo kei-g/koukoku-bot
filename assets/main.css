@@ -154,7 +154,7 @@ ul#messages>li {
 }
 
 ul#messages>li.now-loading {
-  min-height: 100vh;
+  min-height: calc(100vh - 12em);
   visibility: hidden;
 }
 
