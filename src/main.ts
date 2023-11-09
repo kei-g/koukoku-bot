@@ -29,7 +29,7 @@ const getUserEntryAsync = async (name: string): Promise<string[]> => {
 
 const main = async () => {
   const { pid } = process
-  console.log(`process is running on pid:\x1b[33m${pid}\x1b[m\n`)
+  console.log(`process is running on pid \x1b[33m${pid}\x1b[m\n`)
   const { env } = process
   const { SUDO_USER } = env
   if (SUDO_USER) {
