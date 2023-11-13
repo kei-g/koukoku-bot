@@ -28,7 +28,7 @@ type ComposingContext = {
 export class LogService implements CommandService {
   readonly #db: DatabaseService
   readonly #key: string
-  readonly #regexp = /^(バック)?ログ(\s+((?<command>--help)|(?<count>[1-9]\d*)))?$/
+  readonly #regexp = /^(バック)?ログ(\s+((?<command>--help)|(?<count>[1-9]\d*)?(\s?since\s?(?<since>[1-9]\d*))?(\s?until\s?(?<until>[1-9]\d*))?))?$/
   readonly #speechService: SpeechService
 
   constructor(
@@ -41,21 +41,25 @@ export class LogService implements CommandService {
   }
 
   async execute(matched: RegExpMatchArray, rawMessage: string): Promise<void> {
-    const { command, count } = matched.groups
+    const { command, count, since, until } = matched.groups
     if (command) {
       const name = command.slice(2).toLowerCase()
       await this.#speechService.createFromFile(`templates/log/${name}.txt`)
     }
     else {
+      const end = parseIntOr(since, '-')
+      const start = parseIntOr(until, '+')
       const contents = [] as string[]
       const last = {} as ComposingContext
       const filter = except(rawMessage)
-      for (const item of await this.query('+', '-', 200))
+      for (const item of await this.query(`${start}`, `${end}`, 200))
         isRedisStreamItemLog(item)
           ? contents.push(...composeLogs(last, item, filter))
           : contents.push(...composeLogsFromSpeech(last, item))
       const c = Math.min(parseIntOr(count, 10), 30)
-      await this.#speechService.create(contents.slice(0, c).join('\n'))
+      const index = +(since === undefined) * 2 + +(until === undefined)
+      console.log({ count, end, index, since, start, until })
+      await this.#speechService.create(sliceItems(contents, c, index === 1).join('\n'))
     }
   }
 
@@ -130,3 +134,8 @@ const isNotBot = (matched: RegExpMatchArray) => !matched.groups.body.startsWith(
 const isNotTimeSignal = (matched: RegExpMatchArray) => !matched.groups.body.startsWith('[時報] ')
 
 export const messageRE = />>\s「\s(?<body>[^」]+)\s」\(チャット放話\s-\s(?<date>\d\d\/\d\d)\s\((?<dow>[日月火水木金土])\)\s(?<time>\d\d:\d\d:\d\d)\sby\s(?<host>[^\s]+)(\s\((?<forgery>※\s贋作\sDNS\s逆引の疑い)\))?\s君(\s(?<self>〈＊あなた様＊〉))?\)\s<</g
+
+const sliceItems = <T>(items: T[], count: number, reverse: boolean) =>
+  reverse
+    ? items.reverse().slice(0, count).reverse()
+    : items.slice(0, count)

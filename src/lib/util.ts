@@ -31,7 +31,7 @@ export const formatDateTimeToFullyQualifiedString = (target: Date): string => {
   }
 }
 
-export const parseIntOr = (text: string, defaultValue: number, radix?: number): number => {
+export const parseIntOr = <T>(text: string, defaultValue: T, radix?: number): T | number => {
   const c = parseInt(text, radix)
   return isNaN(c) ? defaultValue : c
 }
