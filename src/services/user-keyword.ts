@@ -8,6 +8,7 @@ import {
   SpeechService,
   compileIgnorePattern,
   isIgnorePattern,
+  isKoukokuProxyPutResponse,
   shouldBeIgnored,
 } from '..'
 import { readFile } from 'fs/promises'
@@ -53,8 +54,10 @@ export class UserKeywordService implements CommandService {
       await this.#speechService.create(list.join('\n'))
     else {
       const speech = await this.#speechService.create(list.join('\n'), 7, false)
-      const expiresAt = (speech.expiresAt as Date).toLocaleString()
-      await this.#proxyService.post(`[Bot] キーワード${command}を${speech.url}に置きました,期限${expiresAt}`)
+      if (isKoukokuProxyPutResponse(speech)) {
+        const { expiresAt, url } = speech
+        await this.#proxyService.post(`[Bot] キーワード${command}を${url}に置きました, 期限:${expiresAt}`)
+      }
     }
   }
 
