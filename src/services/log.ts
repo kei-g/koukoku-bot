@@ -32,18 +32,19 @@ export class LogService implements CommandService {
   readonly #db: DatabaseService
   readonly #key: string
   readonly #proxyService: KoukokuProxyService
-  readonly #regexp = /^(バック)?ログ(\s+((?<command>--help)|(?<count>[1-9]\d*)?(\s?since\s?(?<since>[1-9]\d*))?(\s?until\s?(?<until>[1-9]\d*))?))?$/
+  readonly #regexp = /^(バック)?ログ(\s+((?<command>--help)|(?<count>[1-9]\d*)?(\s?since\s?(?<since>\d+(([-/]\d+){1,2}(\s\d+(:\d+){1,2})?)?))?(\s?until\s?(?<until>\d+(([-/]\d+){1,2}(\s\d+(:\d+){1,2})?)?))?))?$/
   readonly #speechService: SpeechService
 
   async #execute(count: string | undefined, rawMessage: string, since: string | undefined, until: string | undefined): Promise<void> {
-    const end = parseIntOr(since, '-')
-    const start = parseIntOr(until, '+')
+    const end = interpretAsDateOr(since, '-')
+    const start = interpretAsDateOr(until, '+')
     const range = formatDateTimeRange(end, start) ?? '{未指定}'
     const index = +(since === undefined) * 2 + +(until === undefined)
     const contents = [] as string[]
     const last = {} as ComposingContext
     const filter = except(rawMessage)
-    for (const item of await this.query(`${start}`, `${end}`))
+    const suffix = ['', '-9'][+(typeof start === 'number')]
+    for (const item of await this.query(`${start}${suffix}`, `${end}`))
       isRedisStreamItemLog(item)
         ? contents.push(...composeLogs(last, item, filter))
         : contents.push(...composeLogsFromSpeech(last, item))
@@ -143,13 +144,67 @@ function* composeLogsFromSpeech(last: ComposingContext, item: RedisStreamItem<Sp
   }
 }
 
+const convertDateComponents = (dateComponents: number[] | undefined): Date | undefined => {
+  if (dateComponents) {
+    const { length } = dateComponents
+    const year = [new Date().getFullYear(), dateComponents[0]][length - 2]
+    const month = [dateComponents[0], dateComponents[1]][length - 2]
+    const day = [dateComponents[1], dateComponents[2]][length - 2]
+    return new Date(year, month - 1, day)
+  }
+}
+
+const convertDateTimeComponents = (dateComponents: number[] | undefined, components: string[]): Date | undefined => {
+  const date = convertDateComponents(dateComponents)
+  const timeComponents = components?.[1]?.split(/[-:]/)?.map(parseStringAsDecimalInteger)
+  if (date && timeComponents) {
+    const { length } = timeComponents
+    const second = [0, timeComponents[2]][+(length === 3)]
+    return new Date(
+      date.getFullYear(),
+      date.getMonth(),
+      date.getDate(),
+      timeComponents[0],
+      timeComponents[1],
+      second
+    )
+  }
+}
+
+const convertFromUnixEpochTime = (value: number): Date | undefined => {
+  if (!isNaN(value))
+    return new Date(value)
+}
+
 const except = (text: string) => (matched: RegExpMatchArray) => !(matched[0] === text)
 
-const formatDateTimeRange = (from: number | string, to: number | string) => {
-  const [since, until] = [from, to].map(v => new Date(v)).map(formatDateTimeToFullyQualifiedString)
+const formatDateTimeRange = (from: number | '-', to: number | '+') => {
+  const [since, until] = [from, to].map((value: number | '-' | '+') => new Date(value)).map(formatDateTimeToFullyQualifiedString)
   const value = +(since === undefined) * 2 + +(until === undefined)
   if (value < 3)
     return `${since?.concat('から') ?? ''}${until?.concat('まで') ?? ''}`
+}
+
+/**
+ * Interprets a string as a datetime, and returns its elapsed time in milliseconds since Jan 01, 1970, 00:00:00.
+ *
+ * @param {string | undefined} text
+ *
+ * @param {T} alternateValue
+ *
+ * @returns {T | number} The elapsed time in milliseconds since Jan 01, 1970, 00:00:00 if the format of `text` is valid. Otherwise, `alternateValue`
+ */
+const interpretAsDateOr = <T>(text: string | undefined, alternateValue: T): T | number => {
+  const components = text?.split(' ')
+  const dateComponents = components?.[0]?.split(/[-/]/)?.map(parseStringAsDecimalInteger)
+  const maybeDate = components?.length === 1
+    ? (
+      dateComponents?.length === 1
+        ? convertFromUnixEpochTime(dateComponents[0])
+        : convertDateComponents(dateComponents)
+    )
+    : convertDateTimeComponents(dateComponents, components)
+  return maybeDate?.getTime() ?? alternateValue
 }
 
 const isNotBot = (matched: RegExpMatchArray) => !matched.groups.body.startsWith('[Bot] ')
@@ -157,6 +212,8 @@ const isNotBot = (matched: RegExpMatchArray) => !matched.groups.body.startsWith(
 const isNotTimeSignal = (matched: RegExpMatchArray) => !matched.groups.body.startsWith('[時報] ')
 
 export const messageRE = />>\s「\s(?<body>[^」]+)\s」\(チャット放話\s-\s(?<date>\d\d\/\d\d)\s\((?<dow>[日月火水木金土])\)\s(?<time>\d\d:\d\d:\d\d)\sby\s(?<host>[^\s]+)(\s\((?<forgery>※\s贋作\sDNS\s逆引の疑い)\))?\s君(\s(?<self>〈＊あなた様＊〉))?\)\s<</g
+
+const parseStringAsDecimalInteger = (value: string) => parseInt(value)
 
 const sliceItems = <T>(items: T[], count: number, reverse: boolean) =>
   reverse
