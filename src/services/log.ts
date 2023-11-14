@@ -38,22 +38,24 @@ export class LogService implements CommandService {
   async #execute(count: string | undefined, rawMessage: string, since: string | undefined, until: string | undefined): Promise<void> {
     const end = parseIntOr(since, '-')
     const start = parseIntOr(until, '+')
+    const range = formatDateTimeRange(end, start) ?? '{未指定}'
     const index = +(since === undefined) * 2 + +(until === undefined)
     const contents = [] as string[]
     const last = {} as ComposingContext
     const filter = except(rawMessage)
-    for (const item of await this.query(`${start}`, `${end}`, 200))
+    for (const item of await this.query(`${start}`, `${end}`))
       isRedisStreamItemLog(item)
         ? contents.push(...composeLogs(last, item, filter))
         : contents.push(...composeLogsFromSpeech(last, item))
     const { length } = contents
-    console.log({ count, end, index, length, since, start, until })
-    if (contents.length) {
+    console.log({ count, end, index, length, range, since, start, until })
+    if (length) {
       const c = Math.min(parseIntOr(count, 10), 30)
+      await this.#proxyService.post(`[Bot] 範囲:'${range}' に対して ${c} 件のログを表示します (全部で ${length} 件)`)
       await this.#speechService.create(sliceItems(contents, c, index === 1).join('\n'))
     }
     else
-      await this.#proxyService.post(`[Bot] 指定された範囲に該当するログがありません, ${formatDateTimeRange(end, start)}`)
+      await this.#proxyService.post(`[Bot] 範囲:'${range}' に該当するログがありません`)
   }
 
   constructor(
@@ -145,7 +147,9 @@ const except = (text: string) => (matched: RegExpMatchArray) => !(matched[0] ===
 
 const formatDateTimeRange = (from: number | string, to: number | string) => {
   const [since, until] = [from, to].map(v => new Date(v)).map(formatDateTimeToFullyQualifiedString)
-  return `${since?.concat('から') ?? ''}${until?.concat('まで') ?? ''}`
+  const value = +(since === undefined) * 2 + +(until === undefined)
+  if (value < 3)
+    return `${since?.concat('から') ?? ''}${until?.concat('まで') ?? ''}`
 }
 
 const isNotBot = (matched: RegExpMatchArray) => !matched.groups.body.startsWith('[Bot] ')
