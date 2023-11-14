@@ -3,11 +3,13 @@ import {
   DatabaseService,
   FilterFunction,
   Injectable,
+  KoukokuProxyService,
   Log,
   RedisStreamItem,
   Speech,
   SpeechService,
   abbreviateHostName,
+  formatDateTimeToFullyQualifiedString,
   isRedisStreamItemLog,
   parseIntOr,
   twoDigitString,
@@ -22,21 +24,46 @@ type ComposingContext = {
 @Injectable({
   DependsOn: [
     DatabaseService,
+    KoukokuProxyService,
     SpeechService,
   ]
 })
 export class LogService implements CommandService {
   readonly #db: DatabaseService
   readonly #key: string
+  readonly #proxyService: KoukokuProxyService
   readonly #regexp = /^(バック)?ログ(\s+((?<command>--help)|(?<count>[1-9]\d*)?(\s?since\s?(?<since>[1-9]\d*))?(\s?until\s?(?<until>[1-9]\d*))?))?$/
   readonly #speechService: SpeechService
 
+  async #execute(count: string | undefined, rawMessage: string, since: string | undefined, until: string | undefined): Promise<void> {
+    const end = parseIntOr(since, '-')
+    const start = parseIntOr(until, '+')
+    const index = +(since === undefined) * 2 + +(until === undefined)
+    const contents = [] as string[]
+    const last = {} as ComposingContext
+    const filter = except(rawMessage)
+    for (const item of await this.query(`${start}`, `${end}`, 200))
+      isRedisStreamItemLog(item)
+        ? contents.push(...composeLogs(last, item, filter))
+        : contents.push(...composeLogsFromSpeech(last, item))
+    const { length } = contents
+    console.log({ count, end, index, length, since, start, until })
+    if (contents.length) {
+      const c = Math.min(parseIntOr(count, 10), 30)
+      await this.#speechService.create(sliceItems(contents, c, index === 1).join('\n'))
+    }
+    else
+      await this.#proxyService.post(`[Bot] 指定された範囲に該当するログがありません, ${formatDateTimeRange(end, start)}`)
+  }
+
   constructor(
     db: DatabaseService,
+    proxyService: KoukokuProxyService,
     speechService: SpeechService
   ) {
     this.#db = db
     this.#key = process.env.REDIS_LOG_KEY ?? 'koukoku:log'
+    this.#proxyService = proxyService
     this.#speechService = speechService
   }
 
@@ -46,21 +73,8 @@ export class LogService implements CommandService {
       const name = command.slice(2).toLowerCase()
       await this.#speechService.createFromFile(`templates/log/${name}.txt`)
     }
-    else {
-      const end = parseIntOr(since, '-')
-      const start = parseIntOr(until, '+')
-      const contents = [] as string[]
-      const last = {} as ComposingContext
-      const filter = except(rawMessage)
-      for (const item of await this.query(`${start}`, `${end}`, 200))
-        isRedisStreamItemLog(item)
-          ? contents.push(...composeLogs(last, item, filter))
-          : contents.push(...composeLogsFromSpeech(last, item))
-      const c = Math.min(parseIntOr(count, 10), 30)
-      const index = +(since === undefined) * 2 + +(until === undefined)
-      console.log({ count, end, index, since, start, until })
-      await this.#speechService.create(sliceItems(contents, c, index === 1).join('\n'))
-    }
+    else
+      await this.#execute(count, rawMessage, since, until)
   }
 
   match(message: string): RegExpMatchArray {
@@ -128,6 +142,11 @@ function* composeLogsFromSpeech(last: ComposingContext, item: RedisStreamItem<Sp
 }
 
 const except = (text: string) => (matched: RegExpMatchArray) => !(matched[0] === text)
+
+const formatDateTimeRange = (from: number | string, to: number | string) => {
+  const [since, until] = [from, to].map(v => new Date(v)).map(formatDateTimeToFullyQualifiedString)
+  return `${since?.concat('から') ?? ''}${until?.concat('まで') ?? ''}`
+}
 
 const isNotBot = (matched: RegExpMatchArray) => !matched.groups.body.startsWith('[Bot] ')
 
