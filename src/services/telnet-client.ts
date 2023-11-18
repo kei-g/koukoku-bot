@@ -119,4 +119,4 @@ export class TelnetClientService implements Service {
   }
 }
 
-const speechRE = /\s+(★☆){2}\s臨時ニユース\s緊急放送\s(☆★){2}\s(?<date>\p{scx=Han}+\s\d+\s年\s\d+\s月\s\d+\s日\s[日月火水木金土]曜)\s(?<time>\d{2}:\d{2})\s+★\sたった今、(?<host>[^\s]+)\s君より[\S\s]+★\s+＝{3}\s大演説の開闢\s＝{3}\s+(?<body>\S+(\s+\S+)*)\s+＝{3}\s大演説の終焉\s＝{3}\s+/gu
+const speechRE = /\s+(★☆){2}\s臨時ニユース\s緊急放送\s(☆★){2}\s(?<date>\p{scx=Han}+\s\d+\s年\s\d+\s月\s\d+\s日\s[日月火水木金土]曜)\s(?<time>\d{2}:\d{2})\s+★\sたった今、(?<host>[^\s]+)\s君より[\S\s]+★\s+＝{3}\s大演説の開闢\s＝{3}(\r\n){2}(?<body>[\S\s]+(?=(\r\n){2}))\s+＝{3}\s大演説の終焉\s＝{3}\s+/gu

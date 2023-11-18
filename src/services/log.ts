@@ -129,7 +129,7 @@ function* composeLogs(last: ComposingContext, item: RedisStreamItem<Log>, ...fil
 
 function* composeLogsFromSpeech(last: ComposingContext, item: RedisStreamItem<Speech>) {
   const lines = item.message.body.split(/\r?\n/)
-  if (!lines.at(0)?.startsWith('[Bot] ')) {
+  if (!lines.at(0)?.match(/^\s*\[Bot\]/)) {
     const { length } = lines
     const suffix = [` ${length - 1} 行省略`, ''][+(length === 1)]
     const current = {
