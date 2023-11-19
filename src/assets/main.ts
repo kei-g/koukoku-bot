@@ -59,7 +59,7 @@ class Client {
     this.#webSocket.addEventListener(
       'message',
       async (msg: MessageEvent<WebSocketMessage>) => {
-        const data = JSON.parse(await msg.data.text()) as RedisStreamItem<Log>[]
+        const data = JSON.parse(await msg.data.text()) as RedisStreamItem<Log> | RedisStreamItem<Speech> | (RedisStreamItem<Log> | RedisStreamItem<Speech>)[]
         data instanceof Array
           ? data.slice(0, 100).reverse().map(this.#prepend.bind(this))
           : this.#prepend(data)
