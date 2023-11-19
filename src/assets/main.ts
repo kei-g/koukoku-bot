@@ -1,4 +1,4 @@
-import { Log, RedisStreamItem, Speech, isRedisStreamItemLog } from '../types'
+import { Log, LogOrSpeechWithTimestamp, RedisStreamItem, Speech, isRedisStreamItemLog } from '../types'
 
 class Client {
   readonly #document: Document
@@ -7,24 +7,25 @@ class Client {
   readonly #removeChild: <T extends Node>(child: T) => T
   #webSocket: WebSocket
 
-  #prepend(item: RedisStreamItem<Log> | RedisStreamItem<Speech>): void {
-    const li = this.#document.getElementById(item.id)
+  #prepend(value: LogOrSpeechWithTimestamp): void {
+    const { item, timestamp } = value
+    const li = this.#document.getElementById(`${timestamp}`)
     isRedisStreamItemLog(item)
-      ? this.#prependLog(item, li)
-      : this.#prependSpeech(item, li)
+      ? this.#prependLog(item, li, timestamp)
+      : this.#prependSpeech(item, li, timestamp)
   }
 
-  #prependLog(item: RedisStreamItem<Log>, li: HTMLElement): void {
+  #prependLog(item: RedisStreamItem<Log>, li: HTMLElement, timestamp: number): void {
     if (li)
       li.textContent = item.message.log
     else {
-      const li = createListItemNode(this.#document, item.id, item.message.log)
+      const li = createListItemNode(this.#document, item.message.log, timestamp)
       this.#messages.prepend(li)
       this.#loading.splice(0).forEach(this.#removeChild)
     }
   }
 
-  #prependSpeech(item: RedisStreamItem<Speech>, li: HTMLElement): void {
+  #prependSpeech(item: RedisStreamItem<Speech>, li: HTMLElement, timestamp: number): void {
     if (li) {
       removeAllChildren(li)
       for (const text of item.message.body.split(/\r?\n/)) {
@@ -34,7 +35,7 @@ class Client {
     }
     else {
       const li = document.createElement('li')
-      li.setAttribute('id', item.id)
+      li.setAttribute('id', `${timestamp}`)
       for (const text of item.message.body.split(/\r?\n/)) {
         li.append(document.createTextNode(text.replaceAll(' ', '\u{00a0}')))
         li.append(document.createElement('br'))
@@ -59,7 +60,7 @@ class Client {
     this.#webSocket.addEventListener(
       'message',
       async (msg: MessageEvent<WebSocketMessage>) => {
-        const data = JSON.parse(await msg.data.text()) as RedisStreamItem<Log> | RedisStreamItem<Speech> | (RedisStreamItem<Log> | RedisStreamItem<Speech>)[]
+        const data = JSON.parse(await msg.data.text()) as LogOrSpeechWithTimestamp | LogOrSpeechWithTimestamp[]
         data instanceof Array
           ? data.slice(0, 100).reverse().map(this.#prepend.bind(this))
           : this.#prepend(data)
@@ -96,9 +97,9 @@ interface WebSocketMessage {
   text(): Promise<string>
 }
 
-const createListItemNode = (document: Document, id: string, message: string): HTMLLIElement => {
+const createListItemNode = (document: Document, message: string, timestamp: number): HTMLLIElement => {
   const li = document.createElement('li')
-  li.setAttribute('id', id)
+  li.setAttribute('id', `${timestamp}`)
   const ctx = {} as HasOffset
   for (const matched of message.matchAll(urlRE))
     qualifyURL(document, ctx, li, matched)

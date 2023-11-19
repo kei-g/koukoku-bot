@@ -36,6 +36,8 @@ export const parseIntOr = <T>(text: string, defaultValue: T, radix?: number): T 
   return isNaN(c) ? defaultValue : c
 }
 
+export const passThrough = <T>(value: T) => value
+
 export const sequentialNumbers = (length: number, offset: number = 0) => [...new Array(length)].map(
   (_: number, i: number) => i + offset
 )

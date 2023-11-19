@@ -36,7 +36,7 @@ export class WebService implements Service {
   readonly #host: string
   readonly #logService: LogService
   readonly #messages = new Array<string>()
-  readonly #pending = new WeakMap<WebSocketClient, RedisStreamItem<Log | Speech>[]>()
+  readonly #pending = new WeakMap<WebSocketClient, WebSocketItem[]>()
   readonly #proxyService: KoukokuProxyService
   readonly #server: Http2SecureServer
   readonly #webSocket: WebSocketServer
@@ -78,7 +78,7 @@ export class WebService implements Service {
     this.#messages.push(`upgrade: ${req.method} for ${req.url}`)
   }
 
-  #enqueuePending(client: WebSocketClient, ...data: RedisStreamItem<Log | Speech>[]): void {
+  #enqueuePending(client: WebSocketClient, ...data: WebSocketItem[]): void {
     const list = this.#pending.get(client)
     list ? list.unshift(...data.reverse()) : this.#pending.set(client, data)
     this.#flushPendingLater(client)
@@ -255,20 +255,20 @@ export class WebService implements Service {
     this.#webSocket.on('connection', this.#acceptWebSocket.bind(this))
   }
 
-  async broadcast(item: RedisStreamItem<Log | Speech>): Promise<void> {
+  async broadcast(item: RedisStreamItem<Log> | RedisStreamItem<Speech>, timestamp: number): Promise<void> {
     if (item) {
       const ctx = {} as { data?: Buffer }
       await using list = new PromiseList()
       for (const client of this.#clients)
         if (client.readyState === WebSocketClient.OPEN) {
-          ctx.data ??= Buffer.from(JSON.stringify(item))
+          ctx.data ??= Buffer.from(JSON.stringify({ item, timestamp }))
           const job = new Promise(
             (resolve: Action<Error | undefined>) => client.send(ctx.data, resolve)
           )
           list.push(job)
         }
         else
-          this.#enqueuePending(client, item)
+          this.#enqueuePending(client, { item, timestamp })
     }
   }
 
@@ -283,6 +283,11 @@ export class WebService implements Service {
     this.#clients.clear()
     list.push(new Promise((resolve: Action<Error | undefined>) => this.#webSocket.close(resolve)))
   }
+}
+
+type WebSocketItem = {
+  item: RedisStreamItem<Log> | RedisStreamItem<Speech>
+  timestamp: number
 }
 
 const readRequestAsJSON = <T>(source: EventEmitter): Promise<T> => {

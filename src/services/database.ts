@@ -62,12 +62,36 @@ export class DatabaseService implements Service {
     )
   }
 
+  async xRange<T extends Record<string, string>>(key: RedisCommandArgument, start: RedisCommandArgument, end: RedisCommandArgument, count?: number): Promise<RedisStreamItem<T>[]> {
+    const opts = {} as { COUNT: number }
+    if (typeof count === 'number')
+      opts.COUNT = count
+    const response = await this.#client.xRange(key, start, end, opts)
+    return response as RedisStreamItem<T>[]
+  }
+
   async xRevRange<T extends Record<string, string>>(key: RedisCommandArgument, start: RedisCommandArgument, end: RedisCommandArgument, count?: number): Promise<RedisStreamItem<T>[]> {
     const opts = {} as { COUNT: number }
     if (typeof count === 'number')
       opts.COUNT = count
     const response = await this.#client.xRevRange(key, start, end, opts)
     return response as RedisStreamItem<T>[]
+  }
+
+  zAdd(key: RedisCommandArgument, score: number, value: string): Promise<number> {
+    return this.#client.zAdd(key, { score, value })
+  }
+
+  zCard(key: RedisCommandArgument): Promise<number> {
+    return this.#client.zCard(key)
+  }
+
+  zRangeByScoreWithScores(key: RedisCommandArgument, range: { max: number, min: number }): Promise<{ score: number, value: string }[]> {
+    return this.#client.zRangeByScoreWithScores(key, range.min, range.max)
+  }
+
+  zRangeWithScores(key: RedisCommandArgument, range: { max: number, min: number }): Promise<{ score: number, value: string }[]> {
+    return this.#client.zRangeWithScores(key, range.min, range.max)
   }
 
   async [Symbol.asyncDispose](): Promise<void> {

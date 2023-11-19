@@ -2,6 +2,11 @@ export type Log = {
   log: string
 }
 
+export type LogOrSpeechWithTimestamp = {
+  item: RedisStreamItem<Log> | RedisStreamItem<Speech>
+  timestamp: number
+}
+
 export type RedisStreamItem<T extends Record<string, string>> = {
   id: string
   message: T
@@ -10,6 +15,8 @@ export type RedisStreamItem<T extends Record<string, string>> = {
 export type Speech = {
   body: string
   date: string
+  estimated?: string
+  finished?: string
   hash: string
   host: string
   time: string
@@ -26,6 +33,8 @@ export const isRedisStreamItemLog = (value: unknown): value is RedisStreamItem<L
   const item = value as RedisStreamItem<Log>
   return isRedisStreamItem(value) && typeof item.message.log === 'string'
 }
+
+export const isRedisStreamItemLogOrSpeech = (value: unknown): value is RedisStreamItem<Log> | RedisStreamItem<Speech> => isRedisStreamItemLog(value) || isRedisStreamItemSpeech(value)
 
 export const isRedisStreamItemSpeech = (value: unknown): value is RedisStreamItem<Speech> => {
   const item = value as RedisStreamItem<Speech>

@@ -40,12 +40,12 @@ export class BotService implements Service {
       : this.#userKeywordService.test.bind(this.#userKeywordService, matched)
   }
 
-  async #message(matched: RegExpMatchArray): Promise<void> {
-    const job = this.#logService.prepend({ log: matched[0] })
+  async #message(timestamp: number, matched: RegExpMatchArray): Promise<void> {
+    const job = this.#logService.prepend({ log: matched[0] }, timestamp)
     dumpMatched(matched)
     const item = await job
     await using list = new PromiseList()
-    list.push(this.#webService.broadcast(item))
+    list.push(this.#webService.broadcast(item, timestamp))
     const { groups } = matched
     if (!groups.self) {
       const handler = this.#findHandler(matched)
@@ -53,22 +53,23 @@ export class BotService implements Service {
     }
   }
 
-  async #speech(matched: RegExpMatchArray): Promise<void> {
+  async #speech(finished: number, timestamp: number | undefined, matched: RegExpMatchArray): Promise<void> {
     const sha256 = createHash('sha256')
     sha256.update(matched[0])
     const hash = sha256.digest().toString('hex')
     const { body, date, host, time } = matched.groups
-    const message = {
+    const speech = {
       body,
       date,
+      finished: `${finished}`,
       hash,
       host,
       time,
     }
-    const job = this.#logService.prepend(message)
+    const job = this.#logService.prepend(speech, timestamp)
     dumpMatched(matched)
     const item = await job
-    this.#webService.broadcast(item)
+    this.#webService.broadcast(item, timestamp)
   }
 
   constructor(

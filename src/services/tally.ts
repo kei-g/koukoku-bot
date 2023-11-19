@@ -55,7 +55,7 @@ export class TallyService implements CommandService {
   async #tallyByWeek(weekly: Map<number, Map<string, RegExpMatchArray[]>>): Promise<void> {
     const now = new Date()
     const epoch = new Date(now.getFullYear(), 0, 1).getTime()
-    for (const item of (await this.#logService.query('+', '-')).filter(isRedisStreamItemLog))
+    for (const item of (await this.#logService.query('+', '-')).map(element => element.item).filter(isRedisStreamItemLog))
       for (const m of item.message.log.matchAll(messageRE)) {
         const timestamp = new Date(parseInt(item.id.split('-')[0])).getTime()
         const numberOfDays = Math.floor((timestamp - epoch) / 864e5)

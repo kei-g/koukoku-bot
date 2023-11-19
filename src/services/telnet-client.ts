@@ -13,6 +13,11 @@ import {
 } from 'tls'
 import { EventEmitter } from 'events'
 
+type BufferWithTimestamp = {
+  timestamp: number
+  value: Buffer
+}
+
 @Injectable({
   DependsOn: [
     DatabaseService,
@@ -24,20 +29,23 @@ export class TelnetClientService implements Service {
   readonly #eventEmitter = new EventEmitter()
   readonly #idleTimerId = new WeakMap<this, NodeJS.Timeout>()
   readonly #key: string
-  readonly #received = [] as Buffer[]
+  readonly #received = [] as BufferWithTimestamp[]
 
   async #acceptData(data: Buffer): Promise<void> {
+    const timestamp = Date.now()
     const idleTimerId = this.#idleTimerId.get(this)
     clearTimeout(idleTimerId)
     this.#idleTimerId.delete(this)
-    if (data.byteLength <= 70)
-      this.#received.push(Buffer.from(data.toString().replaceAll('\x07', '')))
+    if (data.byteLength <= 70) {
+      const value = Buffer.from(data.toString().replaceAll('\x07', ''))
+      this.#received.push({ timestamp, value })
+    }
     else {
       const text = data.toString().replaceAll(/\r?\n/g, '')
       for (const matched of text.matchAll(messageRE))
-        this.#eventEmitter.emit('message', matched)
+        this.#eventEmitter.emit('message', timestamp, matched)
     }
-    this.#idleTimerId.set(this, setTimeout(this.#idle.bind(this), 125))
+    this.#idleTimerId.set(this, setTimeout(this.#idle.bind(this, timestamp), 125))
   }
 
   async #acceptSession(data: Buffer): Promise<void> {
@@ -80,19 +88,42 @@ export class TelnetClientService implements Service {
     console.log(`connection established from ${client.localAddress}:${client.localPort} to ${client.remoteAddress}:${client.remotePort}`)
   }
 
-  async #idle(): Promise<void> {
-    const data = Buffer.concat(this.#received)
+  async #idle(timestamp: number): Promise<void> {
+    const data = Buffer.concat(this.#received.map(ofValue))
     const text = data.toString()
     const last = {} as { position?: number }
     for (const matched of text.matchAll(speechRE)) {
       last.position = matched.index + matched[0].length
-      this.#eventEmitter.emit('speech', matched)
+      this.#eventEmitter.emit(
+        'speech',
+        timestamp,
+        this.#timestampAt(Buffer.from(text.slice(0, matched.index)).byteLength),
+        matched
+      )
     }
     if (0 < last.position) {
       const { byteLength } = Buffer.from(text.slice(0, last.position))
-      this.#received.splice(0)
-      this.#received.push(data.subarray(byteLength))
+      const value = data.subarray(byteLength)
+      if (value.byteLength) {
+        const timestamp = this.#timestampAt(last.position)
+        this.#received.splice(0)
+        this.#received.push({ timestamp, value })
+      }
+      else
+        this.#received.splice(0)
     }
+  }
+
+  #timestampAt(position: number): number | undefined {
+    const ctx = { offset: 0 }
+    const found = this.#received.find(
+      (item: BufferWithTimestamp) => {
+        const { offset } = ctx
+        ctx.offset += item.value.byteLength
+        return offset <= position && position < ctx.offset
+      }
+    )
+    return found?.timestamp
   }
 
   constructor(
@@ -102,7 +133,9 @@ export class TelnetClientService implements Service {
     this.#key = process.env.REDIS_SESSION_KEY ?? 'koukoku:session'
   }
 
-  on(eventName: 'message' | 'speech', listener: (matched: RegExpMatchArray) => PromiseLike<void>): this {
+  on(eventName: 'message', listener: (timestamp: number, matched: RegExpMatchArray) => PromiseLike<void>): this
+  on(eventName: 'speech', listener: (finished: number, timestamp: number | undefined, matched: RegExpMatchArray) => PromiseLike<void>): this
+  on(eventName: 'message' | 'speech', listener: ((timestamp: number, matched: RegExpMatchArray) => PromiseLike<void>) | ((finished: number, timestamp: number | undefined, matched: RegExpMatchArray) => PromiseLike<void>)): this {
     this.#eventEmitter.on(eventName, listener)
     return this
   }
@@ -118,5 +151,7 @@ export class TelnetClientService implements Service {
     client.unref()
   }
 }
+
+const ofValue = (item: BufferWithTimestamp) => item.value
 
 const speechRE = /\s+(★☆){2}\s臨時ニユース\s緊急放送\s(☆★){2}\s(?<date>\p{scx=Han}+\s\d+\s年\s\d+\s月\s\d+\s日\s[日月火水木金土]曜)\s(?<time>\d{2}:\d{2})\s+★\sたった今、(?<host>[^\s]+)\s君より[\S\s]+★\s+＝{3}\s大演説の開闢\s＝{3}(\r\n){2}(?<body>[\S\s]+(?=(\r\n){2}))\s+＝{3}\s大演説の終焉\s＝{3}\s+/gu

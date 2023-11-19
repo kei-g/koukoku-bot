@@ -27,7 +27,7 @@ export class TimeSignalService implements Service {
   readonly #schedulerService: PeriodicSchedulerService
   readonly #timeSignals = [] as TimeSignal[]
 
-  async #message(matched: RegExpMatchArray): Promise<void> {
+  async #message(_timestamp: number, matched: RegExpMatchArray): Promise<void> {
     const hrtime = process.hrtime.bigint()
     const m = matched.groups.body.match(this.#regexp)
     if (m) {

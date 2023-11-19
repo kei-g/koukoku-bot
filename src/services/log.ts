@@ -5,16 +5,17 @@ import {
   Injectable,
   KoukokuProxyService,
   Log,
+  LogOrSpeechWithTimestamp,
   RedisStreamItem,
   Speech,
   SpeechService,
   abbreviateHostName,
   formatDateTimeToFullyQualifiedString,
   isRedisStreamItemLog,
+  isRedisStreamItemLogOrSpeech,
   parseIntOr,
   twoDigitString,
 } from '..'
-import { RedisCommandArgument } from '@redis/client/dist/lib/commands'
 
 type ComposingContext = {
   host?: string
@@ -30,7 +31,8 @@ type ComposingContext = {
 })
 export class LogService implements CommandService {
   readonly #db: DatabaseService
-  readonly #key: string
+  readonly #keyForLog: string
+  readonly #keyForTimestamp: string
   readonly #proxyService: KoukokuProxyService
   readonly #regexp = /^(バック)?ログ(\s+((?<command>--help)|(?<count>[1-9]\d*)?(\s?since\s?(?<since>\d+(([-/]\d+){1,2}(\s\d+(:\d+){1,2})?)?))?(\s?until\s?(?<until>\d+(([-/]\d+){1,2}(\s\d+(:\d+){1,2})?)?))?))?$/
   readonly #speechService: SpeechService
@@ -43,8 +45,7 @@ export class LogService implements CommandService {
     const contents = [] as string[]
     const last = {} as ComposingContext
     const filter = except(rawMessage)
-    const suffix = ['', '-9'][+(typeof start === 'number')]
-    for (const item of await this.query(`${start}${suffix}`, `${end}`))
+    for (const { item } of await this.query(start, end))
       isRedisStreamItemLog(item)
         ? contents.push(...composeLogs(last, item, filter))
         : contents.push(...composeLogsFromSpeech(last, item))
@@ -59,13 +60,27 @@ export class LogService implements CommandService {
       await this.#proxyService.post(`[Bot] 範囲:'${range}' に該当するログがありません`)
   }
 
+  async #query(timestamps: Map<string, number>, count: number | undefined): Promise<LogOrSpeechWithTimestamp[]> {
+    if (timestamps.size) {
+      const sorted = [...timestamps.keys()].sort()
+      const lower = sorted.at(0) ?? '-'
+      const upper = sorted.at(-1) ?? '+'
+      const items = await this.#db.xRevRange(this.#keyForLog, upper, lower, count)
+      return items.filter(hasItemId(timestamps)).sort(descendingById(timestamps)).filter(isRedisStreamItemLogOrSpeech).map(combineItemAndTimestamp(timestamps))
+    }
+    else
+      return []
+  }
+
   constructor(
     db: DatabaseService,
     proxyService: KoukokuProxyService,
     speechService: SpeechService
   ) {
+    const { REDIS_LOG_KEY, REDIS_TIMESTAMP_KEY } = process.env
     this.#db = db
-    this.#key = process.env.REDIS_LOG_KEY ?? 'koukoku:log'
+    this.#keyForLog = REDIS_LOG_KEY ?? 'koukoku:log'
+    this.#keyForTimestamp = REDIS_TIMESTAMP_KEY ?? 'koukoku:timestamp'
     this.#proxyService = proxyService
     this.#speechService = speechService
   }
@@ -84,16 +99,38 @@ export class LogService implements CommandService {
     return message.match(this.#regexp)
   }
 
-  prepend(log: Log): Promise<RedisStreamItem<Log>>
-  prepend(speech: Speech): Promise<RedisStreamItem<Speech>>
-  async prepend(message: Log | Speech): Promise<unknown> {
-    const id = await this.#db.xAdd(this.#key, message)
-    return { id, message }
+  prepend(log: Log, timestamp: number): Promise<RedisStreamItem<Log>>
+  prepend(speech: Speech, timestamp: number | undefined): Promise<RedisStreamItem<Speech>>
+  async prepend(message: Log | Speech, timestamp: number | undefined): Promise<unknown> {
+    const id = await this.#db.xAdd(this.#keyForLog, message)
+    await this.#db.zAdd(this.#keyForTimestamp, timestamp, id)
+    return message
   }
 
-  async query(start: RedisCommandArgument, end: RedisCommandArgument, count?: number): Promise<(RedisStreamItem<Log> | RedisStreamItem<Speech>)[]> {
-    const items = await this.#db.xRevRange(this.#key, start, end, count)
-    return items as (RedisStreamItem<Log> | RedisStreamItem<Speech>)[]
+  async query(max: number | '+', min: number | '-', count?: number): Promise<LogOrSpeechWithTimestamp[]> {
+    const card = await this.#db.zCard(this.#keyForTimestamp)
+    const index = 2 * +(max === '+') + +(min === '-')
+    if (index === 3) {
+      const items = await this.#db.xRevRange(this.#keyForLog, max as '+', min as '-', count)
+      const range = await this.#db.zRangeWithScores(this.#keyForTimestamp, { max: card, min: 0 })
+      const timestamps = new Map(range.map(convertRangeToTuple))
+      return items.filter(hasItemId(timestamps)).sort(descendingById(timestamps)).filter(isRedisStreamItemLogOrSpeech).map(combineItemAndTimestamp(timestamps))
+    }
+    const zRange = [this.#db.zRangeByScoreWithScores, this.#db.zRangeWithScores, this.#db.zRangeWithScores, this.#db.zRangeWithScores]
+    const source = await zRange[index].bind(this.#db)(
+      this.#keyForTimestamp,
+      {
+        max: [max as number, card, card][index],
+        min: [min as number, 0, 0][index],
+      }
+    )
+    const range = index
+      ? source.filter(
+        [isLessThan(max as number), isGreaterThan(min as number)][index - 1]
+      )
+      : source
+    const timestamps = new Map(range.map(convertRangeToTuple))
+    return await this.#query(timestamps, count)
   }
 
   async start(): Promise<void> {
@@ -107,6 +144,14 @@ const applyFilters = <T>(source: T[], ...filters: FilterFunction<T>[]): T[] => f
   (items: T[], filter: FilterFunction<T>) => items.filter(filter),
   source
 )
+
+const combineItemAndTimestamp = (timestamps: Map<string, number>) => (item: RedisStreamItem<Log> | RedisStreamItem<Speech>) => {
+  const timestamp = timestamps.get(item.id)
+  return {
+    item,
+    timestamp
+  }
+}
 
 function* composeLogs(last: ComposingContext, item: RedisStreamItem<Log>, ...filters: FilterFunction<RegExpMatchArray>[]) {
   const message = item.message.log.replaceAll(/\r?\n/g, '')
@@ -176,6 +221,13 @@ const convertFromUnixEpochTime = (value: number): Date | undefined => {
     return new Date(value)
 }
 
+const convertRangeToTuple = (range: { score: number, value: string }) => {
+  const { score, value } = range
+  return [value, score] as [string, number]
+}
+
+const descendingById = (dict: Map<string, number>) => (lhs: { id: string }, rhs: { id: string }) => dict.get(rhs.id) - dict.get(lhs.id)
+
 const except = (text: string) => (matched: RegExpMatchArray) => !(matched[0] === text)
 
 const formatDateTimeRange = (from: number | '-', to: number | '+') => {
@@ -184,6 +236,8 @@ const formatDateTimeRange = (from: number | '-', to: number | '+') => {
   if (value < 3)
     return `${since?.concat('から') ?? ''}${until?.concat('まで') ?? ''}`
 }
+
+const hasItemId = (dict: Map<string, number>) => (item: { id: string }) => dict.has(item.id)
 
 /**
  * Interprets a string as a datetime, and returns its elapsed time in milliseconds since Jan 01, 1970, 00:00:00.
@@ -206,6 +260,10 @@ const interpretAsDateOr = <T>(text: string | undefined, alternateValue: T): T | 
     : convertDateTimeComponents(dateComponents, components)
   return maybeDate?.getTime() ?? alternateValue
 }
+
+const isGreaterThan = <T extends { score: number }>(min: number) => (item: T) => min <= item.score
+
+const isLessThan = <T extends { score: number }>(max: number) => (item: T) => item.score <= max
 
 const isNotBot = (matched: RegExpMatchArray) => !matched.groups.body.startsWith('[Bot] ')
 
