@@ -159,7 +159,7 @@ function* composeLogs(last: ComposingContext, item: RedisStreamItem<Log>, ...fil
   for (const matched of applyFilters(matches, isNotBot, isNotTimeSignal, ...filters)) {
     const current = {
       host: abbreviateHostName(matched.groups.host),
-      message: matched.groups.body.trim(),
+      message: matched.groups.body,
     }
     current.host === last.host ? current.host = '〃' : last.host = current.host
     current.message === last.message ? current.message = '〃' : last.message = current.message
@@ -269,7 +269,7 @@ const isNotBot = (matched: RegExpMatchArray) => !matched.groups.body.startsWith(
 
 const isNotTimeSignal = (matched: RegExpMatchArray) => !matched.groups.body.startsWith('[時報] ')
 
-export const messageRE = />>\s「\s(?<body>[^」]+)\s」\(チャット放話\s-\s(?<date>\d\d\/\d\d)\s\((?<dow>[日月火水木金土])\)\s(?<time>\d\d:\d\d:\d\d)\sby\s(?<host>[^\s]+)(\s\((?<forgery>※\s贋作\sDNS\s逆引の疑い)\))?\s君(\s(?<self>〈＊あなた様＊〉))?\)\s<</g
+export const messageRE = />>\s「\s(?<body>[^」]+(?=\s」))\s」\(チャット放話\s-\s(?<date>\d\d\/\d\d)\s\((?<dow>[日月火水木金土])\)\s(?<time>\d\d:\d\d:\d\d)\sby\s(?<host>[^\s]+)(\s\((?<forgery>※\s贋作\sDNS\s逆引の疑い)\))?\s君(\s(?<self>〈＊あなた様＊〉))?\)\s<</g
 
 const parseStringAsDecimalInteger = (value: string) => parseInt(value)
 
