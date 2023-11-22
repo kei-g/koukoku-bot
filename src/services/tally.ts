@@ -1,12 +1,12 @@
 import {
   CommandService,
   Injectable,
+  Log,
   LogService,
   SpeechService,
   abbreviateHostName,
   formatDateTimeToFullyQualifiedString,
   isRedisStreamItemLog,
-  messageRE,
 } from '..'
 
 type TallyQualifier = {
@@ -26,7 +26,7 @@ export class TallyService implements CommandService {
   readonly #speechService: SpeechService
 
   async #tally(list: string[], _matched: RegExpMatchArray): Promise<void> {
-    const weekly = new Map<number, Map<string, RegExpMatchArray[]>>()
+    const weekly = new Map<number, Map<string, Log[]>>()
     await this.#tallyByWeek(weekly)
     const weeks = [...weekly.keys()].sort(descending)
     const qualifiers: Readonly<TallyQualifier[]> = [
@@ -52,21 +52,20 @@ export class TallyService implements CommandService {
     list.push('※発言回数は Bot および時報を含みます。')
   }
 
-  async #tallyByWeek(weekly: Map<number, Map<string, RegExpMatchArray[]>>): Promise<void> {
+  async #tallyByWeek(weekly: Map<number, Map<string, Log[]>>): Promise<void> {
     const now = new Date()
     const epoch = new Date(now.getFullYear(), 0, 1).getTime()
-    for (const item of (await this.#logService.query('+', '-')).map(element => element.item).filter(isRedisStreamItemLog))
-      for (const m of item.message.log.matchAll(messageRE)) {
-        const timestamp = new Date(parseInt(item.id.split('-')[0])).getTime()
-        const numberOfDays = Math.floor((timestamp - epoch) / 864e5)
-        const week = Math.ceil((now.getDay() + 1 + numberOfDays) / 7)
-        const hosts = weekly.get(week) ?? new Map<string, RegExpMatchArray[]>()
-        const { host } = m.groups
-        const list = hosts.get(host) ?? []
-        list.push(m)
-        hosts.set(host, list)
-        weekly.set(week, hosts)
-      }
+    for (const { id, message } of (await this.#logService.query('+', '-')).map(element => element.item).filter(isRedisStreamItemLog)) {
+      const timestamp = new Date(parseInt(id.split('-')[0])).getTime()
+      const numberOfDays = Math.floor((timestamp - epoch) / 864e5)
+      const week = Math.ceil((now.getDay() + 1 + numberOfDays) / 7)
+      const hosts = weekly.get(week) ?? new Map<string, Log[]>()
+      const { host } = message
+      const list = hosts.get(host) ?? []
+      list.push(message)
+      hosts.set(host, list)
+      weekly.set(week, hosts)
+    }
   }
 
   constructor(
@@ -106,4 +105,4 @@ export class TallyService implements CommandService {
 
 const descending = (lhs: number, rhs: number) => rhs - lhs
 
-const descendingByFrequency = (lhs: [string, RegExpMatchArray[]], rhs: [string, RegExpMatchArray[]]) => rhs[1].length - lhs[1].length
+const descendingByFrequency = (lhs: [string, Log[]], rhs: [string, Log[]]) => rhs[1].length - lhs[1].length

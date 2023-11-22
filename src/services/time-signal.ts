@@ -1,6 +1,7 @@
 import {
   Injectable,
   KoukokuProxyService,
+  Log,
   PeriodicSchedule,
   PeriodicSchedulerService,
   Service,
@@ -27,9 +28,9 @@ export class TimeSignalService implements Service {
   readonly #schedulerService: PeriodicSchedulerService
   readonly #timeSignals = [] as TimeSignal[]
 
-  async #message(_timestamp: number, matched: RegExpMatchArray): Promise<void> {
+  async #message(log: Log, _rawMessage: string, _timestamp: number): Promise<void> {
     const hrtime = process.hrtime.bigint()
-    const m = matched.groups.body.match(this.#regexp)
+    const m = log.body.match(this.#regexp)
     if (m) {
       const time = new Date(m.groups.time.replaceAll(' ', ''))
       this.#timeSignals.unshift({ hrtime, time })

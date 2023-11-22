@@ -3,9 +3,11 @@ import {
   CommandService,
   DependencyResolver,
   Injectable,
+  Log,
   LogService,
   PromiseList,
   Service,
+  Speech,
   TelnetClientService,
   UserKeywordService,
   WebService,
@@ -29,46 +31,32 @@ export class BotService implements Service {
   readonly #userKeywordService: UserKeywordService
   readonly #webService: WebService
 
-  #findHandler(matched: RegExpMatchArray): AsyncAction {
-    const { body } = matched.groups
+  #findHandler(log: Log, rawMessage: string): AsyncAction {
     const found = {} as { matched: RegExpMatchArray }
     const service = this.#resolver.filter(isCommandService).find(
-      (service: CommandService) => !!(found.matched ??= service.match(body))
+      (service: CommandService) => !!(found.matched ??= service.match(log.body))
     )
     return service
-      ? service.execute.bind(service, found.matched, matched[0])
-      : this.#userKeywordService.test.bind(this.#userKeywordService, matched)
+      ? service.execute.bind(service, found.matched, rawMessage)
+      : this.#userKeywordService.test.bind(this.#userKeywordService, log)
   }
 
-  async #message(timestamp: number, matched: RegExpMatchArray): Promise<void> {
-    const job = this.#logService.prepend({ log: matched[0] }, timestamp)
-    dumpMatched(matched)
-    const item = await job
+  async #message(log: Log, rawMessage: string, timestamp: number): Promise<void> {
+    const item = await this.#logService.prepend(log, timestamp)
     await using list = new PromiseList()
     list.push(this.#webService.broadcast(item, timestamp))
-    const { groups } = matched
-    if (!groups.self) {
-      const handler = this.#findHandler(matched)
+    if (log.self === undefined) {
+      const handler = this.#findHandler(log, rawMessage)
       list.push(handler())
     }
   }
 
-  async #speech(finished: number, timestamp: number | undefined, matched: RegExpMatchArray): Promise<void> {
+  async #speech(value: Omit<Speech, 'hash'>, rawMessage: string, timestamp: number | undefined): Promise<void> {
     const sha256 = createHash('sha256')
-    sha256.update(matched[0])
-    const hash = sha256.digest().toString('hex')
-    const { body, date, host, time } = matched.groups
-    const speech = {
-      body,
-      date,
-      finished: `${finished}`,
-      hash,
-      host,
-      time,
-    }
-    const job = this.#logService.prepend(speech, timestamp)
-    dumpMatched(matched)
-    const item = await job
+    sha256.update(rawMessage)
+    const speech = value as Speech
+    speech.hash = sha256.digest().toString('hex')
+    const item = await this.#logService.prepend(speech, timestamp)
     this.#webService.broadcast(item, timestamp)
   }
 
@@ -102,12 +90,4 @@ export class BotService implements Service {
       isService
     )
   }
-}
-
-const dumpMatched = (matched: RegExpMatchArray) => {
-  const { groups: g, index, input } = matched
-  const groups = {} as Record<string, string>
-  for (const key in g)
-    groups[key] = g[key]
-  console.log({ groups, index, input, matched: matched[0] })
 }

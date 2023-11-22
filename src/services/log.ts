@@ -14,6 +14,7 @@ import {
   isRedisStreamItemLog,
   isRedisStreamItemLogOrSpeech,
   parseIntOr,
+  recompose,
   twoDigitString,
 } from '..'
 
@@ -47,7 +48,7 @@ export class LogService implements CommandService {
     const filter = except(rawMessage)
     for (const { item } of await this.query(start, end))
       isRedisStreamItemLog(item)
-        ? contents.push(...composeLogs(last, item, filter))
+        ? contents.push(...composeLogs(last, item.message, filter))
         : contents.push(...composeLogsFromSpeech(last, item))
     const { length } = contents
     console.log({ count, end, index, length, range, since, start, until })
@@ -140,11 +141,6 @@ export class LogService implements CommandService {
   }
 }
 
-const applyFilters = <T>(source: T[], ...filters: FilterFunction<T>[]): T[] => filters.reduce(
-  (items: T[], filter: FilterFunction<T>) => items.filter(filter),
-  source
-)
-
 const combineItemAndTimestamp = (timestamps: Map<string, number>) => (item: RedisStreamItem<Log> | RedisStreamItem<Speech>) => {
   const timestamp = timestamps.get(item.id)
   return {
@@ -153,20 +149,29 @@ const combineItemAndTimestamp = (timestamps: Map<string, number>) => (item: Redi
   }
 }
 
-function* composeLogs(last: ComposingContext, item: RedisStreamItem<Log>, ...filters: FilterFunction<RegExpMatchArray>[]) {
-  const message = item.message.log.replaceAll(/\r?\n/g, '')
-  const matches = [...message.matchAll(messageRE)]
-  for (const matched of applyFilters(matches, isNotBot, isNotTimeSignal, ...filters)) {
+function* composeLogs(last: ComposingContext, log: Log, ...filters: FilterFunction<string>[]) {
+  const { body, date, dow, host, time } = log
+  const text = recompose(log)
+  const c = new Set(
+    [
+      isNotBot(body),
+      isNotTimeSignal(body),
+      filters.every(f => f(text)),
+    ]
+  )
+  const index = 2 * +(c.size === 1) + +c.has(true)
+  if (index === 3) {
     const current = {
-      host: abbreviateHostName(matched.groups.host),
-      message: matched.groups.body,
+      body,
+      host: abbreviateHostName(host),
     }
+    current.body === last.message ? current.body = '〃' : last.message = current.body
     current.host === last.host ? current.host = '〃' : last.host = current.host
-    current.message === last.message ? current.message = '〃' : last.message = current.message
     yield [
-      matched.groups.date,
-      matched.groups.time,
-      current.message,
+      date,
+      dow,
+      time,
+      current.body,
       current.host,
     ].join(' ')
   }
@@ -228,7 +233,7 @@ const convertRangeToTuple = (range: { score: number, value: string }) => {
 
 const descendingById = (dict: Map<string, number>) => (lhs: { id: string }, rhs: { id: string }) => dict.get(rhs.id) - dict.get(lhs.id)
 
-const except = (text: string) => (matched: RegExpMatchArray) => !(matched[0] === text)
+const except = (text: string) => (matched: string) => !(matched === text)
 
 const formatDateTimeRange = (from: number | '-', to: number | '+') => {
   const [since, until] = [from, to].map((value: number | '-' | '+') => new Date(value)).map(formatDateTimeToFullyQualifiedString)
@@ -265,11 +270,9 @@ const isGreaterThan = <T extends { score: number }>(min: number) => (item: T) =>
 
 const isLessThan = <T extends { score: number }>(max: number) => (item: T) => item.score <= max
 
-const isNotBot = (matched: RegExpMatchArray) => !matched.groups.body.startsWith('[Bot] ')
+const isNotBot = (body: string) => !body.startsWith('[Bot] ')
 
-const isNotTimeSignal = (matched: RegExpMatchArray) => !matched.groups.body.startsWith('[時報] ')
-
-export const messageRE = />>\s「\s(?<body>[^」]+(?=\s」))\s」\(チャット放話\s-\s(?<date>\d\d\/\d\d)\s\((?<dow>[日月火水木金土])\)\s(?<time>\d\d:\d\d:\d\d)\sby\s(?<host>[^\s]+)(\s\((?<forgery>※\s贋作\sDNS\s逆引の疑い)\))?\s君(\s(?<self>〈＊あなた様＊〉))?\)\s<</g
+const isNotTimeSignal = (body: string) => !body.startsWith('[時報] ')
 
 const parseStringAsDecimalInteger = (value: string) => parseInt(value)
 

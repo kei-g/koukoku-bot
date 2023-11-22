@@ -5,6 +5,7 @@ import {
   IgnorePattern,
   Injectable,
   KoukokuProxyService,
+  Log,
   SpeechService,
   compileIgnorePattern,
   isIgnorePattern,
@@ -150,10 +151,9 @@ export class UserKeywordService implements CommandService {
     )
   }
 
-  async test(matched: RegExpMatchArray): Promise<void> {
-    if (!shouldBeIgnored(matched, this.#ignorePatterns)) {
-      const { body } = matched.groups
-      const keywords = [...this.#keywords].filter((keyword: string) => body.includes(keyword))
+  async test(log: Log): Promise<void> {
+    if (!shouldBeIgnored(log, this.#ignorePatterns)) {
+      const keywords = [...this.#keywords].filter((keyword: string) => log.body.includes(keyword))
       if (keywords.length)
         for (const value of await this.#db.hmGet(this.#key, ...keywords))
           await this.#proxyService.post(`[Bot] ${value}`)

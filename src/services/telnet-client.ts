@@ -2,8 +2,9 @@ import {
   Action,
   DatabaseService,
   Injectable,
+  Log,
   Service,
-  messageRE,
+  Speech,
   parseIntOr,
 } from '..'
 import {
@@ -42,8 +43,16 @@ export class TelnetClientService implements Service {
     }
     else {
       const text = data.toString().replaceAll(/\r?\n/g, '')
-      for (const matched of text.matchAll(messageRE))
-        this.#eventEmitter.emit('message', timestamp, matched)
+      for (const matched of text.matchAll(messageRE)) {
+        const { body, date, dow, forgery, host, self, time } = matched.groups
+        const log = { body, date, dow, forgery, host, self, time } as Log
+        if (forgery === undefined)
+          delete log.forgery
+        if (self === undefined)
+          delete log.self
+        this.#dispatch('message', log, matched[0], timestamp)
+        dumpMatched(matched)
+      }
     }
     this.#idleTimerId.set(this, setTimeout(this.#idle.bind(this, timestamp), 125))
   }
@@ -88,18 +97,25 @@ export class TelnetClientService implements Service {
     console.log(`connection established from ${client.localAddress}:${client.localPort} to ${client.remoteAddress}:${client.remotePort}`)
   }
 
+  #dispatch(eventName: 'message', log: Log, rawMessage: string, timestamp: number): void
+  #dispatch(eventName: 'speech', speech: Omit<Speech, 'hash'>, rawMessage: string, timestamp: number): void
+  #dispatch(eventName: 'message' | 'speech', value: Log | Omit<Speech, 'hash'>, rawMessage: string, timestamp: number): void {
+    queueMicrotask(
+      this.#eventEmitter.emit.bind(this.#eventEmitter, eventName, value, rawMessage, timestamp)
+    )
+  }
+
   async #idle(timestamp: number): Promise<void> {
     const data = Buffer.concat(this.#received.map(ofValue))
+    const finished = `${timestamp}`
     const text = data.toString()
     const last = {} as { position?: number }
     for (const matched of text.matchAll(speechRE)) {
       last.position = matched.index + matched[0].length
-      this.#eventEmitter.emit(
-        'speech',
-        timestamp,
-        this.#timestampAt(Buffer.from(text.slice(0, matched.index)).byteLength),
-        matched
-      )
+      const { body, date, host, time } = matched.groups
+      const speech = { body, date, finished, host, time }
+      this.#dispatch('speech', speech, matched[0], this.#timestampAt(Buffer.from(text.slice(0, matched.index)).byteLength))
+      dumpMatched(matched)
     }
     if (0 < last.position) {
       const { byteLength } = Buffer.from(text.slice(0, last.position))
@@ -133,9 +149,9 @@ export class TelnetClientService implements Service {
     this.#key = process.env.REDIS_SESSION_KEY ?? 'koukoku:session'
   }
 
-  on(eventName: 'message', listener: (timestamp: number, matched: RegExpMatchArray) => PromiseLike<void>): this
-  on(eventName: 'speech', listener: (finished: number, timestamp: number | undefined, matched: RegExpMatchArray) => PromiseLike<void>): this
-  on(eventName: 'message' | 'speech', listener: ((timestamp: number, matched: RegExpMatchArray) => PromiseLike<void>) | ((finished: number, timestamp: number | undefined, matched: RegExpMatchArray) => PromiseLike<void>)): this {
+  on(eventName: 'message', listener: (log: Log, rawMessage: string, timestamp: number) => PromiseLike<void>): this
+  on(eventName: 'speech', listener: (speech: Omit<Speech, 'hash'>, rawMessage: string, timestamp: number | undefined) => PromiseLike<void>): this
+  on(eventName: 'message' | 'speech', listener: ((log: Log, rawMessage: string, timestamp: number) => PromiseLike<void>) | ((speech: Omit<Speech, 'hash'>, rawMessage: string, timestamp: number | undefined) => PromiseLike<void>)): this {
     this.#eventEmitter.on(eventName, listener)
     return this
   }
@@ -151,6 +167,16 @@ export class TelnetClientService implements Service {
     client.unref()
   }
 }
+
+const dumpMatched = (matched: RegExpMatchArray) => {
+  const { groups: g, index, input } = matched
+  const groups = {} as Record<string, string>
+  for (const key in g)
+    groups[key] = g[key]
+  console.log({ groups, index, input, matched: matched[0] })
+}
+
+const messageRE = />>\s「\s(?<body>[^」]+(?=\s」))\s」\(チャット放話\s-\s(?<date>\d\d\/\d\d)\s\((?<dow>[日月火水木金土])\)\s(?<time>\d\d:\d\d:\d\d)\sby\s(?<host>[^\s]+)(\s\((?<forgery>※\s贋作\sDNS\s逆引の疑い)\))?\s君(\s(?<self>〈＊あなた様＊〉))?\)\s<</g
 
 const ofValue = (item: BufferWithTimestamp) => item.value
 

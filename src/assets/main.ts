@@ -1,4 +1,11 @@
-import { Log, LogOrSpeechWithTimestamp, RedisStreamItem, Speech, isRedisStreamItemLog } from '../types'
+import {
+  Log,
+  LogOrSpeechWithTimestamp,
+  RedisStreamItem,
+  Speech,
+  isRedisStreamItemLog,
+  recompose,
+} from '../types'
 
 class Client {
   readonly #document: Document
@@ -16,10 +23,11 @@ class Client {
   }
 
   #prependLog(item: RedisStreamItem<Log>, li: HTMLElement, timestamp: number): void {
+    const text = recompose(item.message)
     if (li)
-      li.textContent = item.message.log
+      li.textContent = text
     else {
-      const li = createListItemNode(this.#document, item.message.log, timestamp)
+      const li = createListItemNode(this.#document, text, timestamp)
       this.#messages.prepend(li)
       this.#loading.splice(0).forEach(this.#removeChild)
     }
