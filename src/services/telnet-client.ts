@@ -117,16 +117,15 @@ export class TelnetClientService implements Service {
       this.#dispatch('speech', speech, matched[0], this.#timestampAt(Buffer.from(text.slice(0, matched.index)).byteLength))
       dumpMatched(matched)
     }
-    if (0 < last.position) {
-      const { byteLength } = Buffer.from(text.slice(0, last.position))
-      const value = data.subarray(byteLength)
-      if (value.byteLength) {
-        const timestamp = this.#timestampAt(last.position)
-        this.#received.splice(0)
-        this.#received.push({ timestamp, value })
-      }
-      else
-        this.#received.splice(0)
+    const { position } = last
+    if (0 < position) {
+      const value = data.subarray(Buffer.from(text.slice(0, position)).byteLength)
+      const index = +(value.byteLength === 0)
+      const timestampAt = [this.#timestampAt.bind(this), undefined][index]
+      const timestamp = timestampAt?.(position)
+      this.#received.splice(0)
+      const push = [this.#received.push.bind(this.#received), undefined][index]
+      push?.({ timestamp, value })
     }
   }
 
