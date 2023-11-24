@@ -214,8 +214,9 @@ export class WebService implements Service {
   }
 
   async #respondHealth(_request: IncomingMessage, response: ServerResponse): Promise<void> {
+    response.setHeader('content-type', 'text/plain')
     response.statusCode = 200
-    await Promise.resolve()
+    response.write('pong\n')
   }
 
   async #respondRoot(_request: IncomingMessage, response: ServerResponse): Promise<void> {
