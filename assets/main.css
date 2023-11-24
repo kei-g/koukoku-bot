@@ -140,7 +140,7 @@ ul#messages:has(>li.now-lowding) {
 }
 
 ul#messages>li {
-  background-color: #eee;
+  background-color: #78c;
   border-color: #333;
   border-radius: 0.5em;
   border-style: solid;
@@ -158,10 +158,18 @@ ul#messages>li.now-loading {
   visibility: hidden;
 }
 
+ul#messages>li.speech {
+  background-color: #8c7;
+}
+
 ul#messages>li:hover {
   background-color: #acf;
   box-shadow: 0 8px 20px -5px rgba(0, 0, 0, .15), 0 0 5px rgba(0, 0, 0, .1);
   transform: translateX(-4px);
+}
+
+ul#messages>li.speech:hover {
+  background-color: #9f8;
 }
 
 ul#messages>li:hover,

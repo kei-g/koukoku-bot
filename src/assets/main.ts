@@ -43,6 +43,7 @@ class Client {
     }
     else {
       const li = document.createElement('li')
+      li.classList.add('speech')
       li.setAttribute('id', `${timestamp}`)
       for (const text of item.message.body.split(/\r?\n/)) {
         li.append(document.createTextNode(text.replaceAll(' ', '\u{00a0}')))
