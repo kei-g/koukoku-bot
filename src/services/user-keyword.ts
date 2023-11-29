@@ -31,7 +31,7 @@ export class UserKeywordService implements CommandService {
   readonly #key: string
   readonly #keywords = new Set<string>()
   readonly #proxyService: KoukokuProxyService
-  readonly #regexp = /^キーワード(?<command>一覧|登録|解除)?(\s(?<name>(--help|[\p{scx=Hiragana}\p{scx=Katakana}\p{scx=Han}\w]{1,8})))?(\s(?<value>[\p{scx=Common}\p{scx=Hiragana}\p{scx=Katakana}\p{scx=Han}\s\w\x21-\x2f\x3a-\x40\x5b-\x60\x7b-\x7e]+))?$/u
+  readonly #regexp = /^キーワード(?<command>一覧|登録|解除)?(\s(?<name>(--help|[\p{scx=Hiragana}\p{scx=Katakana}\p{scx=Han}\w]{1,8})))?(\s(?<value>[\p{scx=Common}\p{scx=Hiragana}\p{scx=Katakana}\p{scx=Han}\s\w\x21-\x2f\x3a-\x40\x5b-\x60\x7b-\x7e]+))?$/iu
   readonly #speechService: SpeechService
 
   async #createSpeech(command: string, keywords: Map<string, string>): Promise<void> {
@@ -133,7 +133,7 @@ export class UserKeywordService implements CommandService {
     console.log({ u, v })
     const key = [null, name, command, null][u * 2 + v]
     if (key in handlers) {
-      const handler = handlers[key]
+      const handler = handlers[key.toLowerCase()]
       await handler.bind(this)(matched)
     }
   }

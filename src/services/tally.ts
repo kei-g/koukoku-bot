@@ -22,7 +22,7 @@ type TallyQualifier = {
 })
 export class TallyService implements CommandService {
   readonly #logService: LogService
-  readonly #regexp = /^集計(\s(?<command>--help))?$/
+  readonly #regexp = /^集計(\s(?<command>--help))?$/i
   readonly #speechService: SpeechService
 
   async #tally(list: string[], _matched: RegExpMatchArray): Promise<void> {

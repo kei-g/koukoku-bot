@@ -35,7 +35,7 @@ export class LogService implements CommandService {
   readonly #keyForLog: string
   readonly #keyForTimestamp: string
   readonly #proxyService: KoukokuProxyService
-  readonly #regexp = /^(バック)?ログ(\s+((?<command>--help)|(?<count>[1-9]\d*)?(\s?since\s?(?<since>\d+(([-/]\d+){1,2}(\s\d+(:\d+){1,2})?)?))?(\s?until\s?(?<until>\d+(([-/]\d+){1,2}(\s\d+(:\d+){1,2})?)?))?))?$/
+  readonly #regexp = /^(バック)?ログ(\s+((?<command>--help)|(?<count>[1-9]\d*)?(\s?since\s?(?<since>\d+(([-/]\d+){1,2}(\s\d+(:\d+){1,2})?)?))?(\s?until\s?(?<until>\d+(([-/]\d+){1,2}(\s\d+(:\d+){1,2})?)?))?))?$/i
   readonly #speechService: SpeechService
 
   async #execute(count: string | undefined, rawMessage: string, since: string | undefined, until: string | undefined): Promise<void> {
