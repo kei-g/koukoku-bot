@@ -5,7 +5,7 @@
   },
   "dependencies": {
     "@redis/client": "^1.5.12",
-    "ws": "^8.14.2"
+    "ws": "^8.15.0"
   },
   "description": "Bot for telnets://koukoku.shadan.open.ad.jp",
   "devDependencies": {
