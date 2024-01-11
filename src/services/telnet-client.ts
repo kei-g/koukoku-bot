@@ -83,7 +83,17 @@ export class TelnetClientService implements Service {
         this.#client.set(this, client)
         client.on('data', this.#acceptData.bind(this))
         client.on('end', this.#connect.bind(this))
-        client.on('error', (error: Error) => console.error({ error }))
+        client.on(
+          'error',
+          (error: Error) => {
+            console.error({ error })
+            const client = this.#client.get(this)
+            client?.removeAllListeners()
+            client?.unref()
+            this.#client.delete(this)
+            this.#connect()
+          }
+        )
         client.once('session', this.#acceptSession.bind(this))
         client.setKeepAlive(true, 15000)
         client.setNoDelay(true)
