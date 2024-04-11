@@ -55,7 +55,8 @@ export class LogService implements CommandService {
     if (length) {
       const c = Math.min(parseIntOr(count, 10), 30)
       await this.#proxyService.post(`[Bot] 範囲:'${range}' に対して ${c} 件のログを表示します (全部で ${length} 件)`)
-      await this.#speechService.create(sliceItems(contents, c, index === 1).join('\n'))
+      //await this.#speechService.create(sliceItems(contents, c, index === 1).join('\n'))
+      await this.#run(contents, c, index)
     }
     else
       await this.#proxyService.post(`[Bot] 範囲:'${range}' に該当するログがありません`)
@@ -71,6 +72,15 @@ export class LogService implements CommandService {
     }
     else
       return []
+  }
+
+  async #run(contents: string[], c: number, index: number): Promise<void> {
+    for (const item of sliceItems(contents, c, index === 1)) {
+      await this.#proxyService.post(`[Bot] ${item}`)
+      await new Promise<void>(
+        resolve => setTimeout(resolve, 1000)
+      )
+    }
   }
 
   constructor(
