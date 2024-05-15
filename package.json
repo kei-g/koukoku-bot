@@ -20,7 +20,7 @@
     "rimraf": "^5.0.7"
   },
   "engines": {
-    "node": "^21.1.0"
+    "node": ">=20.5.1"
   },
   "license": "BSD-3-Clause",
   "main": "dist/main.js",
