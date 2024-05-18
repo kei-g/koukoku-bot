@@ -7,6 +7,7 @@ import type {
 
 import {
   Injectable,
+  Periodic,
   PromiseList,
   sequentialNumbers,
   twoDigitString,
@@ -90,8 +91,8 @@ export class PeriodicSchedulerService implements Service {
       args,
       callback,
       period: {
-        hours: period?.hours ?? sequentialNumbers(24),
-        minutes: period?.minutes ?? (period?.hours ? [0] : sequentialNumbers(60)),
+        hours: Periodic.hoursOr(period, sequentialNumbers(24)),
+        minutes: Periodic.minutesOr(period, period?.hours ? [0] : sequentialNumbers(60)),
       },
     }
     this.#observers.set(id, observer)
