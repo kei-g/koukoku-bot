@@ -217,9 +217,9 @@ const convertDateComponents = (dateComponents: number[] | undefined): Date | und
   }
 }
 
-const convertDateTimeComponents = (dateComponents: number[] | undefined, components: string[]): Date | undefined => {
+const convertDateTimeComponents = (dateComponents: number[] | undefined, components: string[] | undefined): Date | undefined => {
   const date = convertDateComponents(dateComponents)
-  const timeComponents = components?.[1]?.split(/[-:]/)?.map(parseStringAsDecimalInteger)
+  const timeComponents = components?.[1].split(/[-:]/).map(parseStringAsDecimalInteger)
   if (date && timeComponents) {
     const { length } = timeComponents
     const second = [0, timeComponents[2]][+(length === 3)]
@@ -244,6 +244,15 @@ const convertRangeToTuple = (range: { score: number, value: string }) => {
   return [value, score] as [string, number]
 }
 
+const decomposeDateString = (text: string | undefined) => {
+  const components = text?.split(' ')
+  const dateComponents = components?.[0].split(/[-/]/).map(parseStringAsDecimalInteger)
+  return {
+    components,
+    dateComponents,
+  }
+}
+
 const descendingById = (dict: Map<string, number>) => (lhs: { id: string }, rhs: { id: string }) => dict.get(rhs.id) - dict.get(lhs.id)
 
 const except = (text: string) => (matched: string) => !(matched === text)
@@ -252,10 +261,23 @@ const formatDateTimeRange = (from: number | '-', to: number | '+') => {
   const [since, until] = [from, to].map((value: number | '-' | '+') => new Date(value)).map(formatDateTimeToFullyQualifiedString)
   const value = +(since === undefined) * 2 + +(until === undefined)
   if (value < 3)
-    return `${since?.concat('から') ?? ''}${until?.concat('まで') ?? ''}`
+    return `${qualifyNullishStringWithSuffix(since, 'から')}${qualifyNullishStringWithSuffix(until, 'まで')}`
 }
 
 const hasItemId = (dict: Map<string, number>) => (item: { id: string }) => dict.has(item.id)
+
+const hasSingleElement = <T>(array: T[] | undefined) => array?.length === 1
+
+const interpretAsDate = (text: string | undefined) => {
+  const { components, dateComponents } = decomposeDateString(text)
+  return hasSingleElement(components)
+    ? (
+      hasSingleElement(dateComponents)
+        ? convertFromUnixEpochTime(dateComponents[0])
+        : convertDateComponents(dateComponents)
+    )
+    : convertDateTimeComponents(dateComponents, components)
+}
 
 /**
  * Interprets a string as a datetime, and returns its elapsed time in milliseconds since Jan 01, 1970, 00:00:00.
@@ -266,18 +288,7 @@ const hasItemId = (dict: Map<string, number>) => (item: { id: string }) => dict.
  *
  * @returns {T | number} The elapsed time in milliseconds since Jan 01, 1970, 00:00:00 if the format of `text` is valid. Otherwise, `alternateValue`
  */
-const interpretAsDateOr = <T>(text: string | undefined, alternateValue: T): T | number => {
-  const components = text?.split(' ')
-  const dateComponents = components?.[0]?.split(/[-/]/)?.map(parseStringAsDecimalInteger)
-  const maybeDate = components?.length === 1
-    ? (
-      dateComponents?.length === 1
-        ? convertFromUnixEpochTime(dateComponents[0])
-        : convertDateComponents(dateComponents)
-    )
-    : convertDateTimeComponents(dateComponents, components)
-  return maybeDate?.getTime() ?? alternateValue
-}
+const interpretAsDateOr = <T>(text: string | undefined, alternateValue: T): T | number => interpretAsDate(text)?.getTime() ?? alternateValue
 
 const isGreaterThan = <T extends { score: number }>(min: number) => (item: T) => min <= item.score
 
@@ -288,6 +299,8 @@ const isNotBot = (body: string) => !body.startsWith('[Bot] ')
 const isNotTimeSignal = (body: string) => !body.startsWith('[時報] ')
 
 const parseStringAsDecimalInteger = (value: string) => parseInt(value)
+
+const qualifyNullishStringWithSuffix = (text: string | undefined, suffix: string) => text?.concat(suffix) ?? ''
 
 const sliceItems = <T>(items: T[], count: number, reverse: boolean) =>
   reverse

@@ -139,7 +139,10 @@ export class WebService implements Service {
   }
 
   async #handlePostRequest(request: IncomingMessage, response: ServerResponse): Promise<void> {
-    if (request.headers['content-type'] === 'application/json' && request.url === '/post') {
+    const isJson = +(request.headers['content-type'] === 'application/json')
+    const isPost = +(request.url === '/post')
+    const value = isJson * 2 + isPost
+    if (value === 3) {
       const json = await readRequestAsJSON<{ msg: string, token: string }>(request)
       if (json?.token === process.env.PROXY_TOKEN) {
         const data = Buffer.from(
@@ -281,7 +284,7 @@ export class WebService implements Service {
     await this.#loadAssets()
   }
 
-  async [Symbol.asyncDispose](): Promise<void> {
+  async[Symbol.asyncDispose](): Promise<void> {
     await using list = new PromiseList()
     list.push(new Promise((resolve: Action<Error | undefined>) => this.#server.close(resolve)))
     this.#clients.forEach((client: WebSocketClient) => client.close())
