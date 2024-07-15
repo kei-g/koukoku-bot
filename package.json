@@ -8,15 +8,17 @@
   },
   "description": "Bot for telnets://koukoku.shadan.open.ad.jp",
   "devDependencies": {
+    "@types/eslint": "^8.56.10",
     "@types/node": "^20.14.11",
     "@types/ws": "^8.5.11",
-    "@typescript-eslint/eslint-plugin": "^7.16.1",
-    "@typescript-eslint/parser": "^7.16.1",
+    "@typescript-eslint/eslint-plugin": "^8.0.0-alpha.44",
+    "@typescript-eslint/parser": "^8.0.0-alpha.44",
     "esbuild": "^0.23.0",
     "esbuild-register": "^3.5.0",
-    "eslint": "^8.57.0",
+    "eslint": "^9.7.0",
     "npm-run-all": "^4.1.5",
     "rimraf": "^6.0.1",
+    "typescript": "^5.5.3",
     "ws": "^8.18.0"
   },
   "engines": {
@@ -36,7 +38,7 @@
     "build:assets:favicon": "tools/generate-favicon.sh",
     "build:assets:js": "esbuild src/assets/main.ts --bundle --format=esm --minify --outfile=assets/main.js --platform=browser --target=es2020",
     "clean": "rimraf dist/",
-    "lint": "eslint src/**/*.ts",
+    "lint": "eslint -c eslint.config.mjs src/**/*.ts",
     "start": "node dist/main.js",
     "test": "node --require esbuild-register src/main.ts"
   },
