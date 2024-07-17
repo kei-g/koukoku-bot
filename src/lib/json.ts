@@ -2,12 +2,15 @@ import type { Action } from '..'
 import type { ClientRequest, IncomingMessage } from 'http'
 
 class UnexpectedContentTypeError extends Error {
-  constructor(readonly contentType: string, readonly text: string) {
+  readonly text: string
+
+  constructor(readonly contentType: string, text: string) {
     super(`unexpected content type, ${contentType}`)
+    this.text = text
   }
 }
 
-const bind1st = <A1, O extends unknown[], R>(arg: A1, func: (arg: A1, ...args: O) => R) => (...args: O) => func(arg, ...args)
+const bind1st = <A1, O extends unknown[], R>(arg: A1, func: (_arg: A1, ..._args: O) => R) => (...args: O) => func(arg, ...args)
 
 export const bindToReadAsJSON = <T>(request: ClientRequest) => {
   const job = new Promise(

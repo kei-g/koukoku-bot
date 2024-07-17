@@ -69,8 +69,8 @@ export class KoukokuProxyService implements Service {
   constructor() {
   }
 
-  post(text: string): Promise<Error | KoukokuProxyResponse>
-  post(content: string, maxLength: number, remark: boolean): Promise<Error | KoukokuProxyPutResponse>
+  post(_text: string): Promise<Error | KoukokuProxyResponse>
+  post(_content: string, _maxLength: number, _remark: boolean): Promise<Error | KoukokuProxyPutResponse>
   post(content: string, maxLength?: number, remark?: boolean): Promise<Error | KoukokuProxyResponse | KoukokuProxyPutResponse> {
     const index = +(maxLength === undefined)
     const { PROXY_TOKEN } = process.env

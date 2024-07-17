@@ -25,7 +25,7 @@ type PeriodicObserver<T extends unknown[]> = {
   period: PeriodicPeriod
 }
 
-type PeriodicObserverFunction<T extends unknown[]> = (item: PeriodicSchedule, ...args: T) => unknown
+type PeriodicObserverFunction<T extends unknown[]> = (_item: PeriodicSchedule, ..._args: T) => unknown
 
 type PeriodicTime = {
   delta: bigint

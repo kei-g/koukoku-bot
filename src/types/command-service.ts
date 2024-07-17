@@ -2,8 +2,8 @@ import type { Service } from '.'
 import { isService } from '.'
 
 export interface CommandService extends Service {
-  execute(matched: RegExpMatchArray, rawMessage: string): Promise<void>
-  match(message: string): RegExpMatchArray
+  execute(_matched: RegExpMatchArray, _rawMessage: string): Promise<void>
+  match(_message: string): RegExpMatchArray
 }
 
 export const isCommandService = (value: unknown): value is CommandService => {
