@@ -1,4 +1,5 @@
-import { Service, isService } from '.'
+import type { Service } from '.'
+import { isService } from '.'
 
 export interface CommandService extends Service {
   execute(matched: RegExpMatchArray, rawMessage: string): Promise<void>

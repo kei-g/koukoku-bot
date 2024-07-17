@@ -1,4 +1,4 @@
-import { DeepL } from '..'
+import type { DeepL } from '..'
 
 export type DeepLError = {
   message: string

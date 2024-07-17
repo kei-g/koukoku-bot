@@ -1,9 +1,12 @@
-import {
+import type {
   Action,
   AsyncAction,
   FilterFunction,
-  PromiseList,
   TypeFunction,
+} from '..'
+
+import {
+  PromiseList,
 } from '..'
 
 type ConstructorOf<A, B = undefined> = B extends unknown[]

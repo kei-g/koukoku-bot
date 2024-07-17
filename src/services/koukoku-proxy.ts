@@ -1,12 +1,20 @@
 import {
   Injectable,
-  KoukokuProxyPutResponse,
-  KoukokuProxyResponse,
-  Service,
   bindToReadAsJSON,
   parseIntOr,
 } from '..'
-import { ClientRequest, OutgoingHttpHeaders } from 'http'
+
+import type {
+  KoukokuProxyPutResponse,
+  KoukokuProxyResponse,
+  Service,
+} from '..'
+
+import type {
+  ClientRequest,
+  OutgoingHttpHeaders,
+} from 'http'
+
 import { request as createSecureRequest } from 'https'
 
 @Injectable()

@@ -1,4 +1,7 @@
-import { IgnorePattern, Log } from '..'
+import type {
+  IgnorePattern,
+  Log,
+} from '..'
 
 export const compileIgnorePattern = (pattern: IgnorePattern): IgnorePattern | undefined => pattern.type === 'regexp' ? doCompile(pattern) : pattern
 

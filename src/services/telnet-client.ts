@@ -1,17 +1,22 @@
-import {
+import type {
   Action,
-  DatabaseService,
-  Injectable,
   Log,
   Service,
   Speech,
+} from '..'
+
+import {
+  DatabaseService,
+  Injectable,
   parseIntOr,
 } from '..'
+
 import {
   ConnectionOptions,
   TLSSocket,
   connect,
 } from 'tls'
+
 import { EventEmitter } from 'events'
 
 type BufferWithTimestamp = {

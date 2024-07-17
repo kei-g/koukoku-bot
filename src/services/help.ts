@@ -1,5 +1,8 @@
-import {
+import type {
   CommandService,
+} from '..'
+
+import {
   Injectable,
   SpeechService,
 } from '..'

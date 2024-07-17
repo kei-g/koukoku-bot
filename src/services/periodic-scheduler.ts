@@ -1,13 +1,17 @@
-import {
+import type {
   Action,
-  Injectable,
   PeriodicPeriod,
   PeriodicSchedule,
-  PromiseList,
   Service,
+} from '..'
+
+import {
+  Injectable,
+  PromiseList,
   sequentialNumbers,
   twoDigitString,
 } from '..'
+
 import { randomUUID } from 'crypto'
 
 type PeriodicIndicator = PeriodicTime & {

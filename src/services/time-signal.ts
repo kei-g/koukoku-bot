@@ -1,12 +1,15 @@
 import {
   Injectable,
   KoukokuProxyService,
-  Log,
-  PeriodicSchedule,
   PeriodicSchedulerService,
-  Service,
   TelnetClientService,
   twoDigitString,
+} from '..'
+
+import type {
+  Log,
+  PeriodicSchedule,
+  Service,
 } from '..'
 
 type TimeSignal = {

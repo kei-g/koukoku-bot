@@ -1,20 +1,24 @@
-import {
+import type {
   Action,
   AsyncAction,
-  DependencyResolver,
-  Injectable,
-  KoukokuProxyService,
   Log,
-  LogService,
-  PromiseList,
   RedisStreamItem,
   Service,
   Speech,
+} from '..'
+
+import {
+  DependencyResolver,
+  Injectable,
+  KoukokuProxyService,
+  LogService,
+  PromiseList,
   applyEnvironmentVariables,
   describeKoukokuProxyResponse,
   parseIntOr,
   suppress,
 } from '..'
+
 import { Duplex } from 'stream'
 import { EventEmitter } from 'events'
 import { Http2SecureServer, SecureServerOptions, createSecureServer } from 'http2'

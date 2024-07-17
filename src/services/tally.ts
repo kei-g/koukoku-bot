@@ -1,7 +1,10 @@
-import {
+import type {
   CommandService,
-  Injectable,
   Log,
+} from '..'
+
+import {
+  Injectable,
   LogService,
   SpeechService,
   abbreviateHostName,

@@ -1,10 +1,15 @@
 import {
   Injectable,
+} from '..'
+
+import type {
   RedisStreamItem,
   Service,
 } from '..'
-import { RedisClientType, createClient } from '@redis/client'
-import { RedisCommandArgument } from '@redis/client/dist/lib/commands'
+
+import type { RedisClientType } from '@redis/client'
+import type { RedisCommandArgument } from '@redis/client/dist/lib/commands'
+import { createClient } from '@redis/client'
 
 @Injectable()
 export class DatabaseService implements Service {

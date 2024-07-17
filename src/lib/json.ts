@@ -1,5 +1,5 @@
-import { Action } from '..'
-import { ClientRequest, IncomingMessage } from 'http'
+import type { Action } from '..'
+import type { ClientRequest, IncomingMessage } from 'http'
 
 class UnexpectedContentTypeError extends Error {
   constructor(readonly contentType: string, readonly text: string) {

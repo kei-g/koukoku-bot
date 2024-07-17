@@ -1,17 +1,21 @@
-import {
+import type {
   AsyncAction,
   CommandService,
-  DatabaseService,
   IgnorePattern,
+  Log,
+} from '..'
+
+import {
+  DatabaseService,
   Injectable,
   KoukokuProxyService,
-  Log,
   SpeechService,
   compileIgnorePattern,
   isIgnorePattern,
   isKoukokuProxyPutResponse,
   shouldBeIgnored,
 } from '..'
+
 import { readFile } from 'fs/promises'
 
 type IgnorePatterns = {

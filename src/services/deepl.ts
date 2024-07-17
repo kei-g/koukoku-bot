@@ -1,8 +1,11 @@
-import {
+import type {
   CommandService,
-  DeepL,
   DeepLError,
   DeepLResult,
+} from '..'
+
+import {
+  DeepL,
   Injectable,
   KoukokuProxyService,
   SJIS,
@@ -10,6 +13,7 @@ import {
   bindToReadAsJSON,
   isDeepLError,
 } from '..'
+
 import { request as createSecureRequest } from 'https'
 
 @Injectable({

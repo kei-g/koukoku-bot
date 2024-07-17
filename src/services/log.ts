@@ -1,13 +1,16 @@
-import {
+import type {
   CommandService,
-  DatabaseService,
   FilterFunction,
-  Injectable,
-  KoukokuProxyService,
   Log,
   LogOrSpeechWithTimestamp,
   RedisStreamItem,
   Speech,
+} from '..'
+
+import {
+  DatabaseService,
+  Injectable,
+  KoukokuProxyService,
   SpeechService,
   abbreviateHostName,
   formatDateTimeToFullyQualifiedString,

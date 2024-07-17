@@ -1,12 +1,16 @@
-import {
+import type {
   Action,
   CommandService,
+} from '..'
+
+import {
   DeepLService,
   Injectable,
   KoukokuProxyService,
   isDeepLSuccess,
   isErrorLike,
 } from '..'
+
 import { ChildProcess, SpawnOptionsWithoutStdio, spawn } from 'child_process'
 import { EventEmitter } from 'events'
 import { Stats, stat } from 'fs'

@@ -1,10 +1,13 @@
 import {
+  isRedisStreamItemLog,
+  recompose,
+} from '../types'
+
+import type {
   Log,
   LogOrSpeechWithTimestamp,
   RedisStreamItem,
   Speech,
-  isRedisStreamItemLog,
-  recompose,
 } from '../types'
 
 class Client {

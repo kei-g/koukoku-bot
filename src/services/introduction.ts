@@ -1,11 +1,15 @@
 import {
   Injectable,
-  PeriodicSchedule,
   PeriodicSchedulerService,
-  Service,
   SpeechService,
   formatDateTimeToFullyQualifiedString,
 } from '..'
+
+import type {
+  PeriodicSchedule,
+  Service,
+} from '..'
+
 import { readFile } from 'fs/promises'
 
 @Injectable({

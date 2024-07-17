@@ -1,9 +1,13 @@
 import {
   Injectable,
-  KoukokuProxyPutResponse,
   KoukokuProxyService,
+} from '..'
+
+import type {
+  KoukokuProxyPutResponse,
   Service,
 } from '..'
+
 import { readFile } from 'fs/promises'
 
 @Injectable({

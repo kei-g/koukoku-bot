@@ -1,19 +1,23 @@
-import {
+import type {
   AsyncAction,
   CommandService,
-  DependencyResolver,
-  Injectable,
   Log,
-  LogService,
-  PromiseList,
   Service,
   Speech,
+} from '..'
+
+import {
+  DependencyResolver,
+  Injectable,
+  LogService,
+  PromiseList,
   TelnetClientService,
   UserKeywordService,
   WebService,
   isCommandService,
   isService,
 } from '..'
+
 import { createHash } from 'crypto'
 
 @Injectable({
