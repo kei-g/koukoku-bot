@@ -113,8 +113,8 @@ export class LogService implements CommandService {
     return message.match(this.#regexp)
   }
 
-  prepend(log: Log, timestamp: number): Promise<RedisStreamItem<Log>>
-  prepend(speech: Speech, timestamp: number | undefined): Promise<RedisStreamItem<Speech>>
+  prepend(_log: Log, _timestamp: number): Promise<RedisStreamItem<Log>>
+  prepend(_speech: Speech, _timestamp: number | undefined): Promise<RedisStreamItem<Speech>>
   async prepend(message: Log | Speech, timestamp: number | undefined): Promise<unknown> {
     const id = await this.#db.xAdd(this.#keyForLog, message)
     await this.#db.zAdd(this.#keyForTimestamp, timestamp, id)

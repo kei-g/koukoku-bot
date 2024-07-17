@@ -57,8 +57,8 @@ export class DatabaseService implements Service {
     await this.#client.connect()
   }
 
-  xAdd(key: RedisCommandArgument, message: Record<string, string>): Promise<string>
-  xAdd(key: RedisCommandArgument, id: string, message: Record<string, string>): Promise<string>
+  xAdd(_key: RedisCommandArgument, _message: Record<string, string>): Promise<string>
+  xAdd(_key: RedisCommandArgument, _id: string, _message: Record<string, string>): Promise<string>
   async xAdd(key: RedisCommandArgument, arg1: Record<string, string> | string, arg2?: Record<string, string>): Promise<string> {
     return await (
       typeof arg1 === 'string'

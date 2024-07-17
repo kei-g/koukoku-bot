@@ -112,8 +112,8 @@ export class TelnetClientService implements Service {
     console.log(`connection established from ${client.localAddress}:${client.localPort} to ${client.remoteAddress}:${client.remotePort}`)
   }
 
-  #dispatch(eventName: 'message', log: Log, rawMessage: string, timestamp: number): void
-  #dispatch(eventName: 'speech', speech: Omit<Speech, 'hash'>, rawMessage: string, timestamp: number): void
+  #dispatch(_eventName: 'message', _log: Log, _rawMessage: string, _timestamp: number): void
+  #dispatch(_eventName: 'speech', _speech: Omit<Speech, 'hash'>, _rawMessage: string, _timestamp: number): void
   #dispatch(eventName: 'message' | 'speech', value: Log | Omit<Speech, 'hash'>, rawMessage: string, timestamp: number): void {
     queueMicrotask(
       this.#eventEmitter.emit.bind(this.#eventEmitter, eventName, value, rawMessage, timestamp)
@@ -163,9 +163,9 @@ export class TelnetClientService implements Service {
     this.#key = process.env.REDIS_SESSION_KEY ?? 'koukoku:session'
   }
 
-  on(eventName: 'message', listener: (log: Log, rawMessage: string, timestamp: number) => PromiseLike<void>): this
-  on(eventName: 'speech', listener: (speech: Omit<Speech, 'hash'>, rawMessage: string, timestamp: number | undefined) => PromiseLike<void>): this
-  on(eventName: 'message' | 'speech', listener: ((log: Log, rawMessage: string, timestamp: number) => PromiseLike<void>) | ((speech: Omit<Speech, 'hash'>, rawMessage: string, timestamp: number | undefined) => PromiseLike<void>)): this {
+  on(_eventName: 'message', _listener: (_log: Log, _rawMessage: string, _timestamp: number) => PromiseLike<void>): this
+  on(_eventName: 'speech', _listener: (_speech: Omit<Speech, 'hash'>, _rawMessage: string, _timestamp: number | undefined) => PromiseLike<void>): this
+  on(eventName: 'message' | 'speech', listener: ((_log: Log, _rawMessage: string, _timestamp: number) => PromiseLike<void>) | ((_speech: Omit<Speech, 'hash'>, _rawMessage: string, _timestamp: number | undefined) => PromiseLike<void>)): this {
     this.#eventEmitter.on(eventName, listener)
     return this
   }
