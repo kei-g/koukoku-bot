@@ -14,7 +14,7 @@ class Client {
   readonly #document: Document
   readonly #loading: Element[]
   readonly #messages: HTMLUListElement
-  readonly #removeChild: <T extends Node>(child: T) => T
+  readonly #removeChild: <T extends Node>(_child: T) => T
   #webSocket: WebSocket
 
   #prepend(value: LogOrSpeechWithTimestamp): void {
@@ -121,8 +121,8 @@ const createListItemNode = (document: Document, message: string, timestamp: numb
   return li
 }
 
-async function fetchJSON<T>(url: string, method: 'GET'): Promise<T>
-async function fetchJSON<T>(url: string, method: 'POST', value: object): Promise<T>
+async function fetchJSON<T>(_url: string, _method: 'GET'): Promise<T>
+async function fetchJSON<T>(_url: string, _method: 'POST', _value: object): Promise<T>
 async function fetchJSON<T>(url: string, method: 'GET' | 'POST', value?: object): Promise<T> {
   const init = {
     cache: 'no-cache',

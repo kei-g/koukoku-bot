@@ -42,7 +42,12 @@ export class KoukokuProxyService implements Service {
   }
 
   #post<T>(path: string, payload: Buffer | string = '', headers: OutgoingHttpHeaders = {}): Promise<Error | T> {
-    const data = typeof payload === 'string' ? Buffer.from(payload) : payload
+    const isPayloadString = +(typeof payload === 'string')
+    const candidates = [
+      payload,
+      Buffer.from(payload),
+    ] as Buffer[]
+    const data = candidates[isPayloadString]
     const { byteLength } = data
     headers['content-length'] = byteLength
     headers['content-type'] ??= 'text/plain; charset=utf-8'
@@ -50,9 +55,11 @@ export class KoukokuProxyService implements Service {
     const readAsJSON = bindToReadAsJSON<T>(request)
     if (byteLength) {
       const { host, path } = request
-      typeof payload === 'string'
-        ? console.log(`[proxy] send '\x1b[32m${payload}\x1b[m' to ${host}${path}`)
-        : console.log(`[proxy] send \x1b[33m${byteLength}\x1b[m bytes to ${host}${path}`)
+      const messages = [
+        `[proxy] send \x1b[33m${byteLength}\x1b[m bytes to ${host}${path}`,
+        `[proxy] send '\x1b[32m${payload}\x1b[m' to ${host}${path}`,
+      ]
+      console.log(messages[isPayloadString])
     }
     request.write(data)
     request.end()
@@ -62,8 +69,8 @@ export class KoukokuProxyService implements Service {
   constructor() {
   }
 
-  post(text: string): Promise<Error | KoukokuProxyResponse>
-  post(content: string, maxLength: number, remark: boolean): Promise<Error | KoukokuProxyPutResponse>
+  post(_text: string): Promise<Error | KoukokuProxyResponse>
+  post(_content: string, _maxLength: number, _remark: boolean): Promise<Error | KoukokuProxyPutResponse>
   post(content: string, maxLength?: number, remark?: boolean): Promise<Error | KoukokuProxyResponse | KoukokuProxyPutResponse> {
     const index = +(maxLength === undefined)
     const { PROXY_TOKEN } = process.env

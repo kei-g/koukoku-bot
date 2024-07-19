@@ -31,8 +31,8 @@ export class PhiLLMService implements CommandService {
   readonly #status = {} as { generating?: true, ready?: true }
   readonly #translator: DeepLService
 
-  #extractAnswerPart(error: Error): Error
-  #extractAnswerPart(text: string): string
+  #extractAnswerPart(_error: Error): Error
+  #extractAnswerPart(_text: string): string
   #extractAnswerPart(value: Error | string): Error | string {
     if (typeof value === 'string') {
       const answer = value.match(/^(?<=Answer: )[\S\s]+/)

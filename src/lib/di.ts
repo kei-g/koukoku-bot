@@ -11,16 +11,19 @@ import {
 
 type ConstructorOf<A, B = undefined> = B extends unknown[]
   ? {
-    new(...args: B): A
+    new(..._args: B): A
   }
   : {
     new(): A
   }
 
 class DependencyEntry extends Array<string> {
-  constructor(readonly ctor: ConstructorOf<unknown, unknown[]>, depends: string[] | undefined) {
+  readonly ctor: ConstructorOf<unknown, unknown[]>
+
+  constructor(ctor: ConstructorOf<unknown, unknown[]>, depends: string[] | undefined) {
     const source = depends ?? []
     super(...source)
+    this.ctor = ctor
   }
 }
 
@@ -105,15 +108,14 @@ class FilterHandler {
   }
 }
 
-type InferredConstructorOf<T> = T extends [infer A, ...infer R]
+type InferredConstructorOf<T, U extends unknown[]> = T extends [infer A, ...infer R]
   // XXX: NOTE - A better way to infer the type of constructors without 'any' is desired
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  ? [{ new(...args: any[]): A }, ...InferredConstructorOf<R>]
+  ? [{ new(..._args: U): A }, ...InferredConstructorOf<R, U>]
   : []
 
 export function Injectable<A>(): PassThroughFunction<ConstructorOf<A>>
-export function Injectable<A, B>(args: { DependsOn: Readonly<InferredConstructorOf<B>> }): PassThroughFunction<ConstructorOf<A, B>>
-export function Injectable<A, B>(args?: { DependsOn: Readonly<InferredConstructorOf<B>> }): PassThroughFunction<ConstructorOf<A, B>> {
+export function Injectable<A, B, C extends unknown[]>(_args: { DependsOn: Readonly<InferredConstructorOf<B, C>> }): PassThroughFunction<ConstructorOf<A, B>>
+export function Injectable<A, B, C extends unknown[]>(args?: { DependsOn: Readonly<InferredConstructorOf<B, C>> }): PassThroughFunction<ConstructorOf<A, B>> {
   return (constructor: ConstructorOf<A, B>) => {
     const ctor = constructor as ConstructorOf<unknown, unknown[]>
     const obj = dependencies.get(ctor.name) ?? new DependencyEntry(ctor, args?.DependsOn?.map(c => c.name))
@@ -122,11 +124,11 @@ export function Injectable<A, B>(args?: { DependsOn: Readonly<InferredConstructo
   }
 }
 
-type PassThroughFunction<T> = (value: T) => T
+type PassThroughFunction<T> = (_value: T) => T
 
 type TraversalDirection = 'bottom-up-breadth-first' | 'top-down-depth-first'
 
-type TraversalFunctionType<T> = (cb: AsyncAction<T>, how: TraversalDirection, predicate: TypeFunction<T>) => Promise<void>
+type TraversalFunctionType<T> = (_cb: AsyncAction<T>, _how: TraversalDirection, _predicate: TypeFunction<T>) => Promise<void>
 
 const dependencies = new Map<string, DependencyEntry>()
 

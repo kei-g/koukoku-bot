@@ -29,9 +29,10 @@ export class DeepLService implements CommandService {
   readonly #speechService: SpeechService
 
   async #execute(lang: string | undefined, matched: RegExpMatchArray): Promise<void> {
-    const source = matched.groups?.text?.replaceAll(/(\s%\s?|%\s)/g, '%')
+    //const source = matched.groups?.text?.replaceAll(/(\s%\s?|%\s)/g, '%')
+    const source = trimWhitespacesArroundPercent(matched, 'text')
     if (source) {
-      const to = this.#languageMap.getName(lang as DeepL.LanguageCode)?.concat('に') ?? ''
+      const to = this.#qualifyLangName(lang)
       const r = await this.translate(decodeURI(source), lang)
       if (isDeepLError(r))
         await this.complain(r)
@@ -44,6 +45,10 @@ export class DeepLService implements CommandService {
     }
     else
       await this.complain(new Error('本文がありません'))
+  }
+
+  #qualifyLangName(lang: string | undefined): string {
+    return this.#languageMap.getName(lang as DeepL.LanguageCode)?.concat('に') ?? ''
   }
 
   constructor(
@@ -107,3 +112,5 @@ export class DeepLService implements CommandService {
 const mayBeAssumedAsEnglish = (text: string): boolean => [...text].every(
   (_c: string, i: number) => text.charCodeAt(i) < 128
 )
+
+const trimWhitespacesArroundPercent = (matched: RegExpMatchArray, key: string) => matched.groups?.[key].replaceAll(/(\s%\s?|%\s)/g, '%')
