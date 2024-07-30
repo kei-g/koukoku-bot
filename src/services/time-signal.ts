@@ -12,7 +12,7 @@ import type {
   Service,
 } from '..'
 
-type TimeSignal = {
+interface TimeSignal {
   hrtime: bigint
   time: Date
 }

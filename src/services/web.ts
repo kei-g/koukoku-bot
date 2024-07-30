@@ -293,7 +293,7 @@ export class WebService implements Service {
   }
 }
 
-type WebSocketItem = {
+interface WebSocketItem {
   item: RedisStreamItem<Log> | RedisStreamItem<Speech>
   timestamp: number
 }

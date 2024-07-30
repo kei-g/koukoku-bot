@@ -1,9 +1,9 @@
-export type PeriodicPeriod = {
+export interface PeriodicPeriod {
   hours?: number[]
   minutes?: number[]
 }
 
-export type PeriodicSchedule = {
+export interface PeriodicSchedule {
   behind: bigint
   delta: bigint
   hour: number

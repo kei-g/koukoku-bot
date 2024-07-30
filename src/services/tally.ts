@@ -12,7 +12,7 @@ import {
   isRedisStreamItemLog,
 } from '..'
 
-type TallyQualifier = {
+interface TallyQualifier {
   name: string
   week: number
 }

@@ -18,7 +18,7 @@ import {
 
 import { readFile } from 'fs/promises'
 
-type IgnorePatterns = {
+interface IgnorePatterns {
   ignorePatterns: IgnorePattern[]
 }
 

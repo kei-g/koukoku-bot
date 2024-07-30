@@ -1,10 +1,10 @@
-export type KoukokuProxyError = {
+export interface KoukokuProxyError {
   error: {
     message: string
   }
 }
 
-export type KoukokuProxyPutResponse = {
+export interface KoukokuProxyPutResponse {
   checksum: string
   byteLength: number
   etag: string
@@ -16,7 +16,7 @@ export type KoukokuProxyPutResponse = {
 
 export type KoukokuProxyResponse = KoukokuProxyError | KoukokuProxyResult
 
-export type KoukokuProxyResult = {
+export interface KoukokuProxyResult {
   result: boolean
 }
 

@@ -1,4 +1,4 @@
-type ReplaceContext = {
+interface ReplaceContext {
   map: Map<string, string>
   replaced?: true
   text: string

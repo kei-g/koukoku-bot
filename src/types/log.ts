@@ -1,4 +1,4 @@
-type Common = {
+interface Common extends Record<string, string> {
   body: string
   date: string
   host: string
@@ -7,7 +7,7 @@ type Common = {
 
 export type DayOfWeek = '日' | '月' | '火' | '水' | '木' | '金' | '土'
 
-export type Log = Common & {
+export interface Log extends Common {
   dow: DayOfWeek
   forgery?: '※ 贋作 DNS 逆引の疑い'
   self?: '〈＊あなた様＊〉'
@@ -15,17 +15,17 @@ export type Log = Common & {
 
 type LogKeyType = keyof Log
 
-export type LogOrSpeechWithTimestamp = {
+export interface LogOrSpeechWithTimestamp {
   item: RedisStreamItem<Log> | RedisStreamItem<Speech>
   timestamp: number
 }
 
-export type RedisStreamItem<T extends Record<string, string>> = {
+export interface RedisStreamItem<T extends Record<string, string>> {
   id: string
   message: T
 }
 
-export type Speech = Common & {
+export interface Speech extends Common {
   estimated?: string
   finished?: string
   hash: string

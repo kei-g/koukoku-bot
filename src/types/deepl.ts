@@ -1,16 +1,16 @@
 import type { DeepL } from '..'
 
-export type DeepLError = {
+export interface DeepLError {
   message: string
 }
 
 export type DeepLResult = DeepLError | DeepLSuccess
 
-export type DeepLSuccess = {
+export interface DeepLSuccess {
   translations: Translation[]
 }
 
-type Translation = {
+interface Translation {
   detected_source_language: DeepL.LanguageCode
   text: string
 }

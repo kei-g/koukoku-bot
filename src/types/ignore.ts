@@ -1,4 +1,4 @@
-export type IgnorePattern = {
+export interface IgnorePattern {
   name: string
   target: IgnoreTarget
   type: IgnoreType

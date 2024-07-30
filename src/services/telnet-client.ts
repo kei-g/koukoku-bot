@@ -19,7 +19,7 @@ import {
 
 import { EventEmitter } from 'events'
 
-type BufferWithTimestamp = {
+interface BufferWithTimestamp {
   timestamp: number
   value: Buffer
 }

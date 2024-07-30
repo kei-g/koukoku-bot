@@ -53,7 +53,7 @@ export class CalculationService implements CommandService {
   }
 }
 
-type Parenthesis = {
+interface Parenthesis {
   opened: number
   qualifier: string
 }

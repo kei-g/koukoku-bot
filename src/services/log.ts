@@ -21,7 +21,7 @@ import {
   twoDigitString,
 } from '..'
 
-type ComposingContext = {
+interface ComposingContext {
   host?: string
   message?: string
 }

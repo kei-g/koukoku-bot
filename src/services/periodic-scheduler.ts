@@ -15,11 +15,11 @@ import {
 
 import { randomUUID } from 'crypto'
 
-type PeriodicIndicator = PeriodicTime & {
+interface PeriodicIndicator extends PeriodicTime {
   interval: number
 }
 
-type PeriodicObserver<T extends unknown[]> = {
+interface PeriodicObserver<T extends unknown[]> {
   args: T
   callback: PeriodicObserverFunction<T>
   period: PeriodicPeriod
@@ -27,7 +27,7 @@ type PeriodicObserver<T extends unknown[]> = {
 
 type PeriodicObserverFunction<T extends unknown[]> = (_item: PeriodicSchedule, ..._args: T) => unknown
 
-type PeriodicTime = {
+interface PeriodicTime {
   delta: bigint
   hour: number
   minute: number
