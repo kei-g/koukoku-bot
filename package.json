@@ -10,7 +10,7 @@
   "description": "Bot for telnets://koukoku.shadan.open.ad.jp",
   "devDependencies": {
     "@types/eslint": "^9.6.0",
-    "@types/node": "^22.4.0",
+    "@types/node": "^22.4.1",
     "@types/ws": "^8.5.12",
     "@typescript-eslint/eslint-plugin": "^8.1.0",
     "@typescript-eslint/parser": "^8.1.0",
