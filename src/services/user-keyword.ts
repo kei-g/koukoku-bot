@@ -168,11 +168,11 @@ export class UserKeywordService implements CommandService {
   }
 }
 
-const createMap = (obj: Record<string, string>) => {
+const createMap = (obj: Record<string, { toString: {} }>) => {
   const map = new Map<string, string>()
   for (const key in obj) {
     const value = obj[key]
-    map.set(key, value)
+    map.set(key, `${value}`)
   }
   return map
 }

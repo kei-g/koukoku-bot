@@ -8,8 +8,9 @@ import type {
 } from '..'
 
 import type { RedisClientType } from '@redis/client'
-import type { RedisCommandArgument } from '@redis/client/dist/lib/commands'
 import { createClient } from '@redis/client'
+
+type RedisCommandArgument = string
 
 @Injectable()
 export class DatabaseService implements Service {
@@ -24,8 +25,10 @@ export class DatabaseService implements Service {
     )
   }
 
-  get(key: RedisCommandArgument): Promise<string> {
-    return this.#client.get(key)
+  async get(key: RedisCommandArgument): Promise<string> {
+    const result = await this.#client.get(key)
+    if (typeof result === 'string')
+      return result
   }
 
   async hDel(key: RedisCommandArgument, field: RedisCommandArgument): Promise<boolean> {
@@ -33,7 +36,7 @@ export class DatabaseService implements Service {
     return 0 < number
   }
 
-  hGetAll(key: RedisCommandArgument): Promise<Record<string, string>> {
+  hGetAll(key: RedisCommandArgument): Promise<Record<string, { toString: {} }>> {
     return this.#client.hGetAll(key)
   }
 
@@ -41,16 +44,18 @@ export class DatabaseService implements Service {
     return this.#client.hKeys(key)
   }
 
-  hSetNX(key: RedisCommandArgument, field: RedisCommandArgument, value: RedisCommandArgument): Promise<boolean> {
-    return this.#client.hSetNX(key, field, value)
+  async hSetNX(key: RedisCommandArgument, field: RedisCommandArgument, value: RedisCommandArgument): Promise<boolean> {
+    return await this.#client.hSetNX(key, field, value) === 1
   }
 
-  hmGet(key: RedisCommandArgument, ...fields: RedisCommandArgument[]): Promise<string[]> {
+  hmGet(key: RedisCommandArgument, ...fields: RedisCommandArgument[]): Promise<(string | {})[]> {
     return this.#client.hmGet(key, fields)
   }
 
-  set(key: RedisCommandArgument, value: RedisCommandArgument): Promise<string> {
-    return this.#client.set(key, value)
+  async set(key: RedisCommandArgument, value: RedisCommandArgument): Promise<string> {
+    const result = await this.#client.set(key, value)
+    if (typeof result === 'string')
+      return result
   }
 
   async start(): Promise<void> {
@@ -100,6 +105,7 @@ export class DatabaseService implements Service {
   }
 
   async [Symbol.asyncDispose](): Promise<void> {
-    await this.#client.disconnect()
+    this.#client.destroy()
+    await Promise.resolve()
   }
 }

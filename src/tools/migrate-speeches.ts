@@ -48,7 +48,7 @@ export const migrateSpeeches = async () => {
     await db.zAdd('koukoku:timestamp', { score, value })
   }
   console.log('🙆')
-  await db.disconnect()
+  db.destroy()
 }
 
 migrateSpeeches()
