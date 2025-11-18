@@ -109,6 +109,8 @@ interface WebSocketMessage {
   text(): Promise<string>
 }
 
+const blacklist = window.localStorage.getItem('blacklist').split(' ')
+
 const createListItemNode = (document: Document, message: string, timestamp: number): HTMLLIElement => {
   const li = document.createElement('li')
   li.setAttribute('id', `${timestamp}`)
@@ -147,12 +149,20 @@ const qualifyURL = (document: Document, last: HasOffset, li: HTMLLIElement, matc
     const text = document.createTextNode(value)
     li.appendChild(text)
   }
-  const a = document.createElement('a')
-  a.setAttribute('href', matched[0])
-  a.setAttribute('target', '_blank')
-  const text = document.createTextNode(matched[0])
-  a.appendChild(text)
-  li.appendChild(a)
+  const url = new URL(matched[0])
+  const href = url.toString()
+  if (blacklist.includes(url.hostname)) {
+    const text = document.createTextNode(href)
+    li.appendChild(text)
+  }
+  else {
+    const a = document.createElement('a')
+    a.setAttribute('href', href)
+    a.setAttribute('target', '_blank')
+    const text = document.createTextNode(href)
+    a.appendChild(text)
+    li.appendChild(a)
+  }
   last.offset = matched.index + matched[0].length
 }
 
