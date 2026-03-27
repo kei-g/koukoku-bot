@@ -235,7 +235,7 @@ const convertDateTimeComponents = (dateComponents: number[] | undefined, compone
 }
 
 const convertFromUnixEpochTime = (value: number): Date | undefined => {
-  if (!isNaN(value))
+  if (!Number.isNaN(value))
     return new Date(value)
 }
 

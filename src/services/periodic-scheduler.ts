@@ -13,7 +13,7 @@ import {
   twoDigitString,
 } from '..'
 
-import { randomUUID } from 'crypto'
+import { randomUUID } from 'node:crypto'
 
 interface PeriodicIndicator extends PeriodicTime {
   interval: number

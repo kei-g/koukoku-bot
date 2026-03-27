@@ -60,12 +60,12 @@ const logKeyTypes: Readonly<LogKeyType[]> = [
 
 export const recompose = (log: Log) => {
   const { body, date, dow, forgery, host, self, time } = log
-  const prefix = '>> 「 ' + body + ' 」(チャット放話 - ' + date + ' (' + dow + ') ' + time + ' by ' + host
+  const prefix = `>> 「 ${body} 」(チャット放話 - ${date} (${dow}) ${time} by ${host}`
   const index = 2 * +(forgery === undefined) + +(self === undefined)
   const text = [
-    '(' + forgery + ') 君 ' + self,
-    '(' + forgery + ') 君',
-    '君' + self,
+    `(${forgery}) 君 ${self}`,
+    `(${forgery}) 君`,
+    `君${self}`,
     '君',
   ][index]
   return [prefix, text, ') <<'].join(' ')

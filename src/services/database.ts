@@ -33,7 +33,7 @@ export class DatabaseService implements Service {
 
   async hDel(key: RedisCommandArgument, field: RedisCommandArgument): Promise<boolean> {
     const number = await this.#client.hDel(key, field)
-    return 0 < number
+    return number > 0 
   }
 
   hGetAll(key: RedisCommandArgument): Promise<Record<string, { toString: {} }>> {

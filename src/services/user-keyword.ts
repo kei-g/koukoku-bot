@@ -16,7 +16,7 @@ import {
   shouldBeIgnored,
 } from '..'
 
-import { readFile } from 'fs/promises'
+import { readFile } from 'node:fs/promises'
 
 interface IgnorePatterns {
   ignorePatterns: IgnorePattern[]
@@ -98,7 +98,7 @@ export class UserKeywordService implements CommandService {
 
   async #registerUserKeyword(matched: RegExpMatchArray): Promise<void> {
     const { command, name, value } = matched.groups
-    const text = '[Bot] キーワード' + ((name && value) ? (` "${name}" ` + ['は既に登録されています', 'を登録しました'][+(await this.#db.hSetNX(this.#key, name, value))]) : `${command}の構文が正しくありません`)
+    const text = `[Bot] キーワード${(name && value) ? (` "${name}" ${['は既に登録されています', 'を登録しました'][+(await this.#db.hSetNX(this.#key, name, value))]}`) : `${command}の構文が正しくありません`}`
     if (text.endsWith('を登録しました'))
       this.#keywords.add(name)
     await this.#proxyService.post(text)
@@ -106,7 +106,7 @@ export class UserKeywordService implements CommandService {
 
   async #unregisterUserKeyword(matched: RegExpMatchArray): Promise<void> {
     const { command, name, value } = matched.groups
-    const text = '[Bot] キーワード' + ((name && !value) ? (` "${name}" ` + ['は未登録です', 'を登録解除しました'][+(await this.#db.hDel(this.#key, name))]) : `${command}の構文が正しくありません`)
+    const text = `[Bot] キーワード${(name && !value) ? (` "${name}" ${['は未登録です', 'を登録解除しました'][+(await this.#db.hDel(this.#key, name))]}`) : `${command}の構文が正しくありません`}`
     if (text.endsWith('を登録解除しました'))
       this.#keywords.delete(name)
     await this.#proxyService.post(text)

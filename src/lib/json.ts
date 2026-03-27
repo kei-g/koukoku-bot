@@ -1,5 +1,5 @@
 import type { Action } from '..'
-import type { ClientRequest, IncomingMessage } from 'http'
+import type { ClientRequest, IncomingMessage } from 'node:http'
 
 class UnexpectedContentTypeError extends Error {
   readonly text: string
@@ -53,6 +53,6 @@ const debug = async <T>(host: string, value: Error | T): Promise<void> => {
   }
 }
 
-const writeAsync = (buffer: Uint8Array | string) => new Promise(
-  (resolve: Action<Error | void>) => process.stdout.write(buffer, resolve)
+const writeAsync = (buffer: Uint8Array | string) => new Promise<Error | undefined>(
+  resolve => process.stdout.write(buffer, resolve)
 )

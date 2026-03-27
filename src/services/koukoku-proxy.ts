@@ -13,9 +13,9 @@ import type {
 import type {
   ClientRequest,
   OutgoingHttpHeaders,
-} from 'http'
+} from 'node:http'
 
-import { request as createSecureRequest } from 'https'
+import { request as createSecureRequest } from 'node:https'
 
 @Injectable()
 export class KoukokuProxyService implements Service {
@@ -64,9 +64,6 @@ export class KoukokuProxyService implements Service {
     request.write(data)
     request.end()
     return readAsJSON()
-  }
-
-  constructor() {
   }
 
   post(_text: string): Promise<Error | KoukokuProxyResponse>

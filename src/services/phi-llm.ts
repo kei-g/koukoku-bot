@@ -11,11 +11,11 @@ import {
   isErrorLike,
 } from '..'
 
-import { ChildProcess, SpawnOptionsWithoutStdio, spawn } from 'child_process'
-import { EventEmitter } from 'events'
-import { Stats, stat } from 'fs'
-import { join as joinPath } from 'path'
-import { readFile } from 'fs/promises'
+import { type ChildProcess, type SpawnOptionsWithoutStdio, spawn } from 'node:child_process'
+import { EventEmitter } from 'node:events'
+import { type Stats, stat } from 'node:fs'
+import { join as joinPath } from 'node:path'
+import { readFile } from 'node:fs/promises'
 
 @Injectable({
   DependsOn: [
@@ -30,9 +30,6 @@ export class PhiLLMService implements CommandService {
   readonly #regexp = /^対話\s(?<body>.+)$/
   readonly #status = {} as { generating?: true, ready?: true }
   readonly #translator: DeepLService
-
-  #extractAnswerPart(_error: Error): Error
-  #extractAnswerPart(_text: string): string
   #extractAnswerPart(value: Error | string): Error | string {
     if (typeof value === 'string') {
       const answer = value.match(/^(?<=Answer: )[\S\s]+/)
@@ -45,7 +42,7 @@ export class PhiLLMService implements CommandService {
   }
 
   async #generate(message: string): Promise<Error | string> {
-    const data = Buffer.from(message.replaceAll(/\r?\n/g, '').trim() + '\n')
+    const data = Buffer.from(`${message.replaceAll(/\r?\n/g, '').trim()}\n`)
     const { generating } = this.#status
     let result: Error | string
     if (!generating) {

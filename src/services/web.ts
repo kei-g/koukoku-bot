@@ -19,13 +19,13 @@ import {
   suppress,
 } from '..'
 
-import { Duplex } from 'stream'
-import { EventEmitter } from 'events'
-import { Http2SecureServer, SecureServerOptions, createSecureServer } from 'http2'
-import { IncomingMessage, ServerResponse } from 'http'
-import { RawData, WebSocket as WebSocketClient, WebSocketServer } from 'ws'
-import { join as joinPath } from 'path'
-import { readFile, readdir } from 'fs/promises'
+import type { Duplex } from 'node:stream'
+import type { EventEmitter } from 'node:events'
+import { type Http2SecureServer, type SecureServerOptions, createSecureServer } from 'node:http2'
+import type { IncomingMessage, ServerResponse } from 'node:http'
+import { type RawData, WebSocket as WebSocketClient, WebSocketServer } from 'ws'
+import { join as joinPath } from 'node:path'
+import { readFile, readdir } from 'node:fs/promises'
 
 @Injectable({
   DependsOn: [
@@ -39,7 +39,7 @@ export class WebService implements Service {
   readonly #clients = new Set<WebSocketClient>()
   readonly #host: string
   readonly #logService: LogService
-  readonly #messages = new Array<string>()
+  readonly #messages = [] as string[]
   readonly #pending = new WeakMap<WebSocketClient, WebSocketItem[]>()
   readonly #proxyService: KoukokuProxyService
   readonly #server: Http2SecureServer

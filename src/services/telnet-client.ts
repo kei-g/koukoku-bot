@@ -12,12 +12,12 @@ import {
 } from '..'
 
 import {
-  ConnectionOptions,
-  TLSSocket,
+  type ConnectionOptions,
+  type TLSSocket,
   connect,
-} from 'tls'
+} from 'node:tls'
 
-import { EventEmitter } from 'events'
+import { EventEmitter } from 'node:events'
 
 interface BufferWithTimestamp {
   timestamp: number
@@ -111,9 +111,6 @@ export class TelnetClientService implements Service {
     client?.write('nobody\r\n', cb)
     console.log(`connection established from ${client.localAddress}:${client.localPort} to ${client.remoteAddress}:${client.remotePort}`)
   }
-
-  #dispatch(_eventName: 'message', _log: Log, _rawMessage: string, _timestamp: number): void
-  #dispatch(_eventName: 'speech', _speech: Omit<Speech, 'hash'>, _rawMessage: string, _timestamp: number): void
   #dispatch(eventName: 'message' | 'speech', value: Log | Omit<Speech, 'hash'>, rawMessage: string, timestamp: number): void {
     queueMicrotask(
       this.#eventEmitter.emit.bind(this.#eventEmitter, eventName, value, rawMessage, timestamp)
@@ -133,7 +130,7 @@ export class TelnetClientService implements Service {
       dumpMatched(matched)
     }
     const { position } = last
-    if (0 < position) {
+    if (position > 0) {
       const value = data.subarray(Buffer.from(text.slice(0, position)).byteLength)
       const index = +(value.byteLength === 0)
       const timestampAt = [this.#timestampAt.bind(this), undefined][index]

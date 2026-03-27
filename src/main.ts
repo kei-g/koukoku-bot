@@ -1,9 +1,9 @@
 import {
-  Action,
+  type Action,
   BotService,
   DependencyResolver,
-} from '.'
-import { readFile } from 'fs/promises'
+} from './index.ts'
+import { readFile } from 'node:fs/promises'
 
 const catchAndExit = (reason?: unknown) => {
   console.error(reason instanceof Error ? reason.message : reason)

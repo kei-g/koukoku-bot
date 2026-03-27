@@ -18,7 +18,7 @@ import {
   isService,
 } from '..'
 
-import { createHash } from 'crypto'
+import { createHash } from 'node:crypto'
 
 @Injectable({
   DependsOn: [

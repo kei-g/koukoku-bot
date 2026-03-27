@@ -5,7 +5,7 @@ const abbreviationRE = /(\*+[-.]?)+/g
 const dateRE = /^(?<era>\p{scx=Han}+)(?<year>\d+)年(?<month>\d+)月(?<day>\d+)日\((?<weekday>\p{scx=Han}+)\)$/u
 
 export const formatDateTimeToFullyQualifiedString = (target: Date): string => {
-  if (!isNaN(target?.getTime() ?? NaN)) {
+  if (!Number.isNaN(target?.getTime() ?? NaN)) {
     const locale = 'ja-JP-u-ca-japanese'
     const date = target.toLocaleDateString(
       locale,
@@ -33,7 +33,7 @@ export const formatDateTimeToFullyQualifiedString = (target: Date): string => {
 
 export const parseIntOr = <T>(text: string, defaultValue: T, radix?: number): T | number => {
   const c = parseInt(text, radix)
-  return isNaN(c) ? defaultValue : c
+  return Number.isNaN(c) ? defaultValue : c
 }
 
 export const passThrough = <T>(value: T) => value
@@ -47,4 +47,4 @@ export const suppress = <T extends Error>(error: T): void => (
   undefined
 )
 
-export const twoDigitString = (value: number | string) => ('0' + value).slice(-2)
+export const twoDigitString = (value: number | string) => (`0${value}`).slice(-2)

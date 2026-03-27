@@ -84,7 +84,7 @@ const validateParentheses = (expr: string): void => {
     undefined,
     '不正な閉じ括弧があります',
   ]
-  const index = (+isNaN(parenthesis.opened)) * 2 + +(parenthesis.opened === 0)
+  const index = (+Number.isNaN(parenthesis.opened)) * 2 + +(parenthesis.opened === 0)
   const message = messages[index]
   if (typeof message === 'string')
     throw new Error(message)

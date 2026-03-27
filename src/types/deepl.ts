@@ -21,7 +21,7 @@ export const isDeepLResult = (value: unknown): value is DeepLResult => isDeepLEr
 
 export const isDeepLSuccess = (value: unknown): value is DeepLSuccess => {
   const success = value as DeepLSuccess
-  return typeof success === 'object' && success.translations instanceof Array && success.translations.every(isTranslationLike)
+  return typeof success === 'object' && Array.isArray(success.translations) && success.translations.every(isTranslationLike)
 }
 
 export const isErrorLike = (value: unknown): value is DeepLError | Error => {

@@ -1,14 +1,14 @@
 import {
   isRedisStreamItemLog,
   recompose,
-} from '../types'
+} from '../types/index.ts'
 
 import type {
   Log,
   LogOrSpeechWithTimestamp,
   RedisStreamItem,
   Speech,
-} from '../types'
+} from '../types/index.ts'
 
 class Client {
   readonly #document: Document
@@ -65,7 +65,7 @@ class Client {
   }
 
   connect(): void {
-    this.#webSocket = new WebSocket('wss://' + this.#document.location.hostname)
+    this.#webSocket = new WebSocket(`wss://${this.#document.location.hostname}`)
     this.#webSocket.addEventListener('close', this.connect.bind(this))
     this.#webSocket.addEventListener('error', console.error)
     this.#webSocket.addEventListener('open', console.log)
@@ -73,7 +73,7 @@ class Client {
       'message',
       async (msg: MessageEvent<WebSocketMessage>) => {
         const data = JSON.parse(await msg.data.text()) as LogOrSpeechWithTimestamp | LogOrSpeechWithTimestamp[]
-        data instanceof Array
+        Array.isArray(data)
           ? data.slice(0, 100).reverse().map(this.#prepend.bind(this))
           : this.#prepend(data)
       }

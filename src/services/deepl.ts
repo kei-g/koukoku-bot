@@ -14,7 +14,7 @@ import {
   isDeepLError,
 } from '..'
 
-import { request as createSecureRequest } from 'https'
+import { request as createSecureRequest } from 'node:https'
 
 @Injectable({
   DependsOn: [

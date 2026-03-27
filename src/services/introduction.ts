@@ -10,7 +10,7 @@ import type {
   Service,
 } from '..'
 
-import { readFile } from 'fs/promises'
+import { readFile } from 'node:fs/promises'
 
 @Injectable({
   DependsOn: [

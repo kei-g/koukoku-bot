@@ -1,4 +1,4 @@
-import { readFile } from 'fs/promises'
+import { readFile } from 'node:fs/promises'
 
 export namespace SJIS {
   export const decode = async (data: Buffer): Promise<string> => {
@@ -65,4 +65,4 @@ const getReverseCodeMapAsync = async (): Promise<void> => {
 
 const reverseCodeMap = {} as Record<number, Record<number, string> | string>
 
-const toHexString = (...values: number[]): string => values.map((v: number) => ('0' + v.toString(16)).slice(-2)).join('')
+const toHexString = (...values: number[]): string => values.map((v: number) => (`0${v.toString(16)}`).slice(-2)).join('')
