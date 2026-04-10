@@ -9,7 +9,7 @@
   },
   "description": "Bot for telnets://koukoku.shadan.open.ad.jp",
   "devDependencies": {
-    "@biomejs/biome": "^2.4.10",
+    "@biomejs/biome": "^2.4.11",
     "@types/node": "^25.5.2",
     "@types/ws": "^8.18.1",
     "esbuild": "^0.28.0",
