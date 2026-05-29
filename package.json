@@ -4,7 +4,7 @@
     "name": "kei-g"
   },
   "dependencies": {
-    "@redis/client": "^5.12.1",
+    "@redis/client": "^6.0.0",
     "ws": "^8.21.0"
   },
   "description": "Bot for telnets://koukoku.shadan.open.ad.jp",
